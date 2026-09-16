@@ -1,0 +1,53 @@
+{
+  "_comment": "CodeBuddy / Claude Code style hooks. Shape: event name -> matcher -> hooks[]. Payload is delivered via stdin JSON (session_id / cwd / prompt / tool_*); the script parses it. CodeBuddy: merge the 'hooks' object into the 'hooks' field of ~/.codebuddy/settings.json (a standalone ~/.codebuddy/hooks.json is NOT read). settings.json must be valid JSON with no comments, so delete this _comment key before merging. Replace /ABS/PATH/agent-memory-bridge/ with the absolute directory containing claude-mem-worker.sh, e.g. /home/yourname/.local/share/claude-mem/. The installer renders this file automatically with the path substituted.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABS/PATH/agent-memory-bridge/claude-mem-worker.sh hook codebuddy",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABS/PATH/agent-memory-bridge/claude-mem-worker.sh hook codebuddy",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABS/PATH/agent-memory-bridge/claude-mem-worker.sh hook codebuddy",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABS/PATH/agent-memory-bridge/claude-mem-worker.sh hook codebuddy",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

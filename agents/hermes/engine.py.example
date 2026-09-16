@@ -1,0 +1,75 @@
+"""
+Hermes -> claude-mem worker integration snippet (engine.py example).
+
+Paste the functions below into Hermes' background thread / event loop and
+invoke hermes_capture_turn() after each assistant turn finishes.
+
+Two easy mistakes to avoid:
+  1. The unified script builds contentSessionId as "${agent}-${sessionId}",
+     so pass the RAW session_id here. Do not add a "hermes-" prefix yourself
+     or you end up with a double "hermes-hermes-xxx" prefix.
+  2. Capture BOTH the user prompt and the assistant reply. Recording only
+     assistant replies loses the conversational context.
+
+Dependencies: subprocess + a background thread only (no `requests`).
+"""
+import os
+import subprocess
+import threading
+
+# Unified worker client (single source of truth); overridable via env for deployment.
+CLAUDE_MEM_WORKER_SH = os.environ.get(
+    "CLAUDE_MEM_WORKER_SH",
+    os.path.expanduser("~/.local/share/claude-mem/claude-mem-worker.sh"),
+)
+
+
+def _run_worker_async(args, timeout=10):
+    """Call the unified script without blocking; failures are silent."""
+    def _run():
+        try:
+            subprocess.run(
+                ["bash", CLAUDE_MEM_WORKER_SH, *args],
+                timeout=timeout, capture_output=True,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def hermes_capture_turn(session_id: str, user_content: str, assistant_text: str) -> None:
+    """Call after a conversation turn: store user prompt + assistant reply + summarize.
+
+    Pass the raw session_id; the script adds the "hermes-" prefix itself.
+    """
+    if not assistant_text.strip() and not user_content.strip():
+        return
+
+    def _run():
+        try:
+            cwd = os.getcwd()
+            # 1) Create the session and store the user prompt
+            #    (5th arg = prompt; never send an empty prompt)
+            if user_content.strip():
+                subprocess.run(
+                    ["bash", CLAUDE_MEM_WORKER_SH, "init", "hermes", session_id,
+                     cwd, "", user_content],
+                    timeout=10, capture_output=True,
+                )
+            # 2) Record the assistant reply
+            if assistant_text.strip():
+                subprocess.run(
+                    ["bash", CLAUDE_MEM_WORKER_SH, "observation", "hermes", session_id,
+                     assistant_text, cwd, "assistant_message", "hermes"],
+                    timeout=10, capture_output=True,
+                )
+            # 3) Trigger summarization
+            subprocess.run(
+                ["bash", CLAUDE_MEM_WORKER_SH, "summarize", "hermes", session_id, "", "hermes"],
+                timeout=10, capture_output=True,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()

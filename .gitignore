@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Generated local config (track .env.example, never local secrets)
+.env
+*.env.local
+
+# Installer / sync backups
+*.bak
+*.bak-*
+
+# Logs and local data
+*.log
+logs/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
