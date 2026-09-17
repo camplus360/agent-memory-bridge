@@ -2,7 +2,7 @@
 
 > 目标：把 **opencode / CodeBuddy / pi / Hermes** 四个 agent 的对话记忆，全部自动捕获并写入同一个
 > 本机 claude-mem worker（`127.0.0.1:37701`）。
-> 所有 agent 统一通过本目录的 `claude-mem-worker.sh` 对接 worker（opencode/pi 为原生参考实现，字段一致）。
+> 所有 agent 统一通过本目录的 `claude-mem-worker.py` 对接 worker（opencode/pi 为原生参考实现，字段一致）。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```
   opencode ─┐
-  CodeBuddy ─┼─► claude-mem-worker.sh（单一真相源）─► claude-mem worker :37701 ─► SQLite + Chroma
+  CodeBuddy ─┼─► claude-mem-worker.py（单一真相源）─► claude-mem worker :37701 ─► SQLite + Chroma
   pi ───────┤      （init/observation/summarize）      （总结/embedding/检索）
   Hermes ───┘
 ```
@@ -27,9 +27,9 @@
 
 ```bash
 # 克隆或拷贝本目录到目标机器任意位置
-git clone <repo-url> hook-sh-worker
-cd hook-sh-worker
-ls                      # 应看到 claude-mem-worker.sh  install.sh  README.md  agents/
+git clone <repo-url> agent-memory-bridge
+cd agent-memory-bridge
+ls                      # 应看到 claude-mem-worker.py  install.sh  README.md  agents/
 ```
 
 ### 1.2 安装并启动 claude-mem worker
@@ -96,7 +96,7 @@ systemctl --user enable --now claude-mem-worker
 ## 二、一键安装各 agent 接入
 
 ```bash
-cd hook-sh-worker
+cd agent-memory-bridge
 ./install.sh --all        # 安装全部 4 个 agent
 # 或选择性安装：
 ./install.sh --agent opencode
@@ -108,7 +108,7 @@ cd hook-sh-worker
 ```
 
 `install.sh` 会做：
-1. 复制 `claude-mem-worker.sh` → 安装根（默认 `~/.local/share/claude-mem/`）；
+1. 复制 `claude-mem-worker.py` → 安装根（默认 `~/.local/share/claude-mem/`）；
 2. 生成 `.env` 模板（host/port/超时/重试）；
 3. 按所选 agent 把接入落到真实位置（见下表）。
 
@@ -133,7 +133,7 @@ cd hook-sh-worker
 ```json
 {
   "plugin": [
-    "/ABS/PATH/hook-sh-worker/agents/opencode"
+    "/ABS/PATH/agent-memory-bridge/agents/opencode"
   ]
 }
 ```
@@ -158,7 +158,7 @@ cd hook-sh-worker
 
 **跑单测（可选，验证捕获逻辑）**：
 ```bash
-cd /ABS/PATH/hook-sh-worker/agents/opencode
+cd /ABS/PATH/agent-memory-bridge/agents/opencode
 bun test index.test.js        # 或 npm test
 ```
 
@@ -177,14 +177,14 @@ bun test index.test.js        # 或 npm test
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }]
+    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }]
   }
 }
 ```
-其中 `<ABSOLUTE>` 是本机 `claude-mem-worker.sh` 的**绝对路径**（如 `/home/yourname/.local/share/claude-mem/claude-mem-worker.sh`）。
+其中 `<ABSOLUTE>` 是本机 `claude-mem-worker.py` 的**绝对路径**（如 `/home/yourname/.local/share/claude-mem/claude-mem-worker.py`）。
 
 
 ---
@@ -198,16 +198,13 @@ pi 是 npm 包，**不能直接覆盖**，需按 `agents/pi/DEPLOY.md` 部署。
 npm install -g @earendil-works/pi-coding-agent
 export PATH="$HOME/.npm-global/bin:$PATH"     # 否则敲 pi 报 command not found
 
-# 2) 装记忆扩展
-pi install npm:pi-agent-memory
-#    确认 ~/.pi/agent/settings.json 的 packages 含 "npm:pi-agent-memory"
+# 2) 把本仓库 agents/pi 目录注册为本地路径包
+cd agent-memory-bridge/agents/pi
+pi install "$PWD"
+#    确认 ~/.pi/agent/settings.json 的 packages 已含绝对路径
+#    .../agent-memory-bridge/agents/pi
 
-# 3) 同步本仓库的主副本到 npm 包（替换包内 extensions/pi-mem.ts）
-cd hook-sh-worker/agents/pi
-./install.sh sync        # 主副本 pi-mem.ts → ~/.pi/agent/npm/node_modules/pi-agent-memory/extensions/pi-mem.ts
-./install.sh status      # 确认已同步
-
-# 4) 重启 pi，验证
+# 3) 重启 pi 并验证（扩展仅启动时加载一次）
 pi
 > /memory-status
 # 期望: 已连接 worker v13.18.0 @ http://127.0.0.1:37701
@@ -238,19 +235,19 @@ hermes_on_session_end(session_id, last_assistant_text)
 ```
 
 调用走后台线程、失败静默，**绝不阻塞 Hermes 主流程**。脚本路径在 `engine.py.example` 顶部
-`CLAUDE_MEM_WORKER_SH` 常量里改成你机器上的绝对路径。
+`CLAUDE_MEM_WORKER_PY` 常量里改成你机器上的绝对路径。
 
 ---
 
 ## 四、统一脚本用法（所有 shell 型 agent 通用）
 
 ```bash
-claude-mem-worker.sh init        <agent> <sessionId> [cwd] [project] [prompt]
-claude-mem-worker.sh observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
-claude-mem-worker.sh summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
-claude-mem-worker.sh turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
-claude-mem-worker.sh search      <query> [limit]
-claude-mem-worker.sh health
+python3 claude-mem-worker.py init        <agent> <sessionId> [cwd] [project] [prompt]
+python3 claude-mem-worker.py observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
+python3 claude-mem-worker.py summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
+python3 claude-mem-worker.py turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
+python3 claude-mem-worker.py search      <query> [limit]
+python3 claude-mem-worker.py health
 ```
 
 `<agent>` 区分来源（`codebuddy` / `hermes` / ...），自动拼成 `${agent}-${sessionId}`。
@@ -268,7 +265,7 @@ worker 不可达时脚本**静默 exit 0**，不阻塞 agent。
 
 ```bash
 # 用统一脚本直接打 worker
-W=~/.local/share/claude-mem/claude-mem-worker.sh
+W="python3 ~/.local/share/claude-mem/claude-mem-worker.py"
 for a in opencode codebuddy pi hermes; do
   $W init $a s1 /tmp
   $W observation $a s1 "测试文本 $a" /tmp assistant_message $a
@@ -317,6 +314,6 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=你的关键词&li
 
 # 移除 opencode 插件：从 opencode.json 的 plugin 数组删掉该目录
 # 移除 CodeBuddy：删 hooks.json 里对应 command
-# 移除 pi：pi uninstall npm:pi-agent-memory
+# 移除 pi：pi remove /绝对路径/agent-memory-bridge/agents/pi
 # 移除 Hermes：删 engine.py 里注入的函数调用
 ```

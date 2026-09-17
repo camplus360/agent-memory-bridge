@@ -1,32 +1,37 @@
 /**
- * Pi-Claude-Mem — claude-mem extension for pi-mono agents
+ * pi-claude-mem — self-maintained claude-mem memory extension for pi-agents
  *
- * Gives pi-agents (pi-coding-agent, custom pi-mono runtimes) persistent
- * cross-session memory by connecting to the claude-mem worker HTTP API.
+ * Gives pi-coding-agent (and other pi-mono runtimes) persistent cross-session
+ * memory by talking to a locally running claude-mem worker over its HTTP API.
  *
- * Derived from the OpenClaw plugin (claude-mem/openclaw/src/index.ts) which
- * is a proven integration pattern for pi-mono-based runtimes.
+ * This is a privately maintained fork, not an npm package. It derives from the
+ * OpenClaw plugin (claude-mem/openclaw/src/index.ts) via the ArtemisAI
+ * "pi-agent-memory" adapter (fork baseline v0.3.4). pi loads it as a local
+ * path package from this repository. Provenance and the full change list are
+ * documented in ../NOTICE; license: AGPL-3.0-or-later (see ../LICENSE).
  *
- * Install:
- *   pi install npm:pi-agent-memory
- *   — or —
- *   pi install git:github.com/thedotmack/claude-mem --extensions pi-agent/extensions
+ * Install (local path package):
+ *   pi install /absolute/path/to/pi-claude-mem
  *
- * Requires: claude-mem worker running on localhost:37777
+ * Requires: a claude-mem worker reachable at CLAUDE_MEM_HOST:CLAUDE_MEM_PORT
+ * (fallback 127.0.0.1:37777; host/port are also read from
+ *  ~/.claude-mem/settings.json, so a worker installed with its default config
+ *  is resolved correctly — this machine resolves to 127.0.0.1:37701).
  *
  * ---------------------------------------------------------------------------
- * Local patched build (2026-09-03)
- * Four compatibility fixes for claude-mem worker v13.18.0 + pi-agent-memory v0.3.4:
- *   1. FIX-1 port/host parsing accepts string form (original required number -> fallback to 37777)
- *   2. FIX-2 drop the /api/sessions/complete call (intentionally removed upstream in v12.4.4)
- *   3. FIX-3 /memory-status shows worker URL, port source and dependency degradation
- *   4. FIX-4 log the actual worker URL at startup to diagnose port mismatches
- * See DEBUG.md in the original repo for the debugging history
+ * 本维护版相对 fork 基线 pi-agent-memory@0.3.4 的修改（适配 worker v13.18.0）：
+ *   1. FIX-1 端口/host 解析兼容字符串形态（原实现要求 number，导致 fallback 37777）
+ *   2. FIX-2 移除 /api/sessions/complete 调用（该端点自 worker v12.4.4 起被移除）
+ *   3. FIX-3 /memory-status 增加 worker 地址、端口来源、依赖降级等诊断信息
+ *   4. FIX-4 启动时打印实际连接的 worker 地址，便于排查端口错配
+ *   5. 注入上下文标签 <pi-mem-context> 正名为 <claude-mem-context>
+ * 出处与完整修改清单见同目录 NOTICE。
  * ---------------------------------------------------------------------------
  */
 
 import { Type } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -38,15 +43,15 @@ import { basename, join } from "node:path";
 const DEFAULT_WORKER_PORT = 37777;
 
 /**
- * FIX-1: read claude-mem settings.json.
+ * FIX-1: 读取 claude-mem settings.json。
  *
- * The original did try/catch + JSON.parse separately in each discover function, with two problems:
- *   a) any comment (non-standard JSONC) made the whole parse fail -> silent fallback to defaults
- *   b) even on success, CLAUDE_MEM_WORKER_PORT is a **string** in the default config
- *      (e.g. "37701"), while the original check required typeof === "number" -> fallback to 37777
- * The extension then connected to 37777 while the worker listens on 37701, and /memory-status failed.
+ * 原实现在每个 discover 函数里各自 try/catch + JSON.parse，存在两个问题：
+ *   a) settings.json 一旦含注释（非标准 JSONC）就整体解析失败 → 静默 fallback 默认值
+ *   b) 即使解析成功，CLAUDE_MEM_WORKER_PORT 在 claude-mem 默认配置里是**字符串**
+ *      （如 "37701"），而原判断要求 typeof === "number" → 同样 fallback 到 37777
+ * 结果就是扩展连到 37777，而 worker 实际监听 37701，/memory-status 报不可达。
  *
- * Parse settings once here and accept both number and string forms.
+ * 这里统一解析一次，并兼容 number / string 两种形态。
  */
 function readSettings(): Record<string, unknown> {
 	const settingsDir = process.env.CLAUDE_MEM_DATA_DIR || join(homedir(), ".claude-mem");
@@ -55,15 +60,15 @@ function readSettings(): Record<string, unknown> {
 	try {
 		return JSON.parse(readFileSync(settingsPath, "utf-8")) as Record<string, unknown>;
 	} catch {
-		// Invalid settings.json (e.g. // comments): degrade silently, never block startup
-		console.warn(`[pi-claude-mem] failed to parse ${settingsPath}, using default worker address`);
+		// settings.json 非法（如含 // 注释）时静默降级，不阻断启动
+		console.warn(`[pi-claude-mem] 无法解析 ${settingsPath}，将使用默认 worker 地址`);
 		return {};
 	}
 }
 
 const SETTINGS = readSettings();
 
-/** Coerce a number or numeric string to a positive integer; return null if unparseable. */
+/** 把 number 或数字字符串统一成正整数，无法识别时返回 null */
 function asPositiveInt(value: unknown): number | null {
 	if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
 	if (typeof value === "string" && value.trim() !== "") {
@@ -90,7 +95,7 @@ function discoverWorkerPort(): number {
 	return DEFAULT_WORKER_PORT;
 }
 
-/** FIX-3: record where the port came from for /memory-status diagnostics. */
+/** FIX-3: 记录端口来源，便于 /memory-status 排查"为什么连到这个端口" */
 function describePortSource(): string {
 	if (asPositiveInt(process.env.CLAUDE_MEM_PORT) !== null) return "env:CLAUDE_MEM_PORT";
 	if (asPositiveInt(SETTINGS.CLAUDE_MEM_WORKER_PORT) !== null) return "settings.json";
@@ -103,6 +108,73 @@ const PORT_SOURCE = describePortSource();
 const PLATFORM_SOURCE = "pi-agent";
 const MAX_TOOL_RESPONSE_LENGTH = 1000;
 const WORKER_FETCH_TIMEOUT_MS = 10_000;
+
+// ---- Transport: unified claude-mem-worker.py vs in-process fetch ------------
+// CLAUDE_MEM_TRANSPORT=py (default): every worker call is proxied through the
+//   unified claude-mem-worker.py `api` passthrough (spawned), i.e. pi -> .py -> worker.
+// CLAUDE_MEM_TRANSPORT=http: force the original direct-fetch path.
+// If the .py shim is missing / exits non-zero / cannot reach the worker, the call
+// transparently falls back to direct fetch, so this extension (the memory
+// lifeline) is never broken by the migration. Override path with CLAUDE_MEM_WORKER_PY.
+const TRANSPORT = (process.env.CLAUDE_MEM_TRANSPORT || "py").toLowerCase();
+const WORKER_PY =
+	process.env.CLAUDE_MEM_WORKER_PY ||
+	`${homedir()}/.local/share/claude-mem/claude-mem-worker.py`;
+
+// Invoke the .py shim once. Resolves { text } on delivery (exit 0), else null
+// (no interpreter/script, timeout, or worker unreachable -> non-zero exit).
+function callWorkerPy(
+	method: "POST" | "GET",
+	path: string,
+	body?: Record<string, unknown>,
+): Promise<{ text: string } | null> {
+	return new Promise((resolve) => {
+		let child: ReturnType<typeof spawn>;
+		try {
+			child = spawn("python3", [WORKER_PY, "api", method, path], {
+				stdio: ["pipe", "pipe", "ignore"],
+			});
+		} catch {
+			resolve(null);
+			return;
+		}
+		const chunks: Buffer[] = [];
+		let settled = false;
+		const finish = (v: { text: string } | null) => {
+			if (!settled) {
+				settled = true;
+				resolve(v);
+			}
+		};
+		const timer = setTimeout(() => {
+			try {
+				child.kill();
+			} catch {
+				/* ignore */
+			}
+			finish(null);
+		}, WORKER_FETCH_TIMEOUT_MS + 5000);
+		child.stdout.on("data", (d: Buffer) => chunks.push(d));
+		child.on("error", () => {
+			clearTimeout(timer);
+			finish(null);
+		});
+		child.on("close", (code: number | null) => {
+			clearTimeout(timer);
+			finish(code === 0 ? { text: Buffer.concat(chunks).toString("utf8") } : null);
+		});
+		try {
+			if (method === "POST" && body !== undefined) {
+				child.stdin.end(Buffer.from(JSON.stringify(body), "utf8"));
+			} else {
+				child.stdin.end();
+			}
+		} catch {
+			clearTimeout(timer);
+			finish(null);
+		}
+	});
+}
 const MAX_SEARCH_LIMIT = 100;
 
 // =============================================================================
@@ -124,7 +196,7 @@ function createTimeoutController(): { controller: AbortController; clear: () => 
 	return { controller, clear: () => clearTimeout(timer) };
 }
 
-async function workerPost(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+async function workerPostHttp(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
 	const { controller, clear } = createTimeoutController();
 	try {
 		const response = await fetch(workerUrl(path), {
@@ -151,7 +223,7 @@ async function workerPost(path: string, body: Record<string, unknown>): Promise<
 	}
 }
 
-function workerPostFireAndForget(path: string, body: Record<string, unknown>): void {
+function workerPostFireAndForgetHttp(path: string, body: Record<string, unknown>): void {
 	fetch(workerUrl(path), {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -162,7 +234,7 @@ function workerPostFireAndForget(path: string, body: Record<string, unknown>): v
 	});
 }
 
-async function workerGetText(path: string): Promise<string | null> {
+async function workerGetTextHttp(path: string): Promise<string | null> {
 	const { controller, clear } = createTimeoutController();
 	try {
 		const response = await fetch(workerUrl(path), { signal: controller.signal });
@@ -184,27 +256,61 @@ async function workerGetText(path: string): Promise<string | null> {
 	}
 }
 
+// Public transport: prefer the unified .py shim; fall back to direct fetch on any failure.
+async function workerPost(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+	if (TRANSPORT === "py") {
+		const r = await callWorkerPy("POST", path, body);
+		if (r) {
+			try {
+				return r.text ? (JSON.parse(r.text) as Record<string, unknown>) : {};
+			} catch {
+				return {};
+			}
+		}
+	}
+	return workerPostHttp(path, body);
+}
+
+function workerPostFireAndForget(path: string, body: Record<string, unknown>): void {
+	if (TRANSPORT === "py") {
+		// The spawn itself is async; only fall back to fetch if the shim could not deliver.
+		callWorkerPy("POST", path, body).then((r) => {
+			if (!r) workerPostFireAndForgetHttp(path, body);
+		});
+		return;
+	}
+	workerPostFireAndForgetHttp(path, body);
+}
+
+async function workerGetText(path: string): Promise<string | null> {
+	if (TRANSPORT === "py") {
+		const r = await callWorkerPy("GET", path);
+		if (r) return r.text;
+	}
+	return workerGetTextHttp(path);
+}
+
 // =============================================================================
-// FIX-2: never POST /api/sessions/complete (aligns with upstream claude-mem architecture)
+// FIX-2: 不再发送 /api/sessions/complete（跟随 claude-mem 官方架构）
 //
-// The original called this endpoint 3s after agent_end to tell the worker to complete the session.
-// The endpoint was intentionally removed upstream in claude-mem **v12.4.4 (2026-04-26)**:
+// 原实现在 agent_end 里延迟 3 秒调用该端点通知 worker 结束会话。
+// 该端点已在 claude-mem **v12.4.4（2026-04-26）** 被官方有意移除：
 //
-//   CHANGELOG v12.4.4:
+//   CHANGELOG v12.4.4 原文：
 //   "This release removes the `SessionEnd → session-complete` hook entirely.
 //    The worker self-completes via its SDK-agent generator's finally-block,
 //    so no external completion call is needed."
 //
-// Reason: an external completion call fires when end signals (/clear, exit, logout) arrive and
-// marks **pending observations in the queue as abandoned and drops them**, losing memories.
-// The bug lurked for ~6 months from 2025-11-07, affecting Claude Code, Gemini CLI,
-// the transcripts processor, the OpenCode plugin and OpenClaw.
+// 移除原因：外部完成调用会在会话结束信号（/clear、退出、登出）到达时，
+// 把队列中**待处理的 observations 标记为 abandoned 并丢弃**，造成记忆丢失。
+// 该问题自 2025-11-07 起潜伏约 6 个月，波及 Claude Code、Gemini CLI、
+// transcripts processor、OpenCode plugin、OpenClaw 五个端。
 //
-// The official openclaw plugin removed scheduleSessionComplete / completionDelayMs /
-// pendingCompletionTimers, keeping only init / observations / summarize.
-// pi-agent-memory v0.3.4 is a pre-v12.4.4 fork, so the logic lingers here.
+// 官方 openclaw 插件已同步移除 scheduleSessionComplete / completionDelayMs /
+// pendingCompletionTimers，仅保留 init / observations / summarize 三个调用。
+// pi-agent-memory v0.3.4 是 v12.4.4 之前的 fork，故仍残留该逻辑。
 //
-// Conclusion: the worker completes sessions itself; the extension must not notify completion.
+// 结论：worker 自行完成会话，扩展端不应、也不必发送完成通知。
 // =============================================================================
 
 // =============================================================================
@@ -237,9 +343,9 @@ export default function piMemExtension(pi: ExtensionAPI) {
 		return;
 	}
 
-	// FIX-4: log the actual worker URL and port source at startup.
-	// Port mismatch is the most common failure; this log removes the guesswork.
-	console.log(`[pi-claude-mem] worker -> ${workerUrl("")} (port from: ${PORT_SOURCE})`);
+	// FIX-4: 启动时打印实际连接的 worker 地址与端口来源。
+	// 端口错配是本扩展最常见的故障，有了这行日志无需猜测。
+	console.log(`[pi-claude-mem] worker → ${workerUrl("")} (端口来源: ${PORT_SOURCE})`);
 
 	// =========================================================================
 	// Event: session_start
@@ -313,7 +419,7 @@ export default function piMemExtension(pi: ExtensionAPI) {
 					content: [
 						{
 							type: "text" as const,
-							text: `<pi-mem-context>\n${contextText}\n</pi-mem-context>`,
+							text: `<claude-mem-context>\n${contextText}\n</claude-mem-context>`,
 						},
 					],
 				},
@@ -368,13 +474,13 @@ export default function piMemExtension(pi: ExtensionAPI) {
 	// =========================================================================
 	// Event: agent_end
 	//
-	// Summarize the session. await ensures the worker receives the request.
+	// Summarize the session. 使用 await 确保 worker 收到请求。
 	//
-	// FIX-2: no delayed /api/sessions/complete - the endpoint was removed in v12.4.4;
-	// the worker completes the session itself in the SDK-agent generator's finally-block,
-	// an external completion call would instead drop pending observations.
+	// FIX-2: 不再延迟发送 /api/sessions/complete —— 该端点自 v12.4.4 起已被移除，
+	// worker 在 SDK-agent generator 的 finally-block 中自行完成会话，
+	// 外部完成调用反而会丢弃队列中待处理的 observations。
 	//
-	// Mirrors openclaw/src/index.ts lines 813-845 (completion part removed).
+	// Mirrors openclaw/src/index.ts lines 813-845（移除 completion 部分）。
 	// =========================================================================
 
 	pi.on("agent_end", async (event) => {
@@ -399,8 +505,8 @@ export default function piMemExtension(pi: ExtensionAPI) {
 			}
 		}
 
-		// Await summarize - once received, the SDK-agent generator's finally-block
-		// completes the session itself (including remaining observations). See FIX-2.
+		// Await summarize —— worker 收到后由 SDK-agent generator 的 finally-block
+		// 自行完成会话（含剩余 observations 的处理），无需外部完成通知。见 FIX-2。
 		await workerPost("/api/sessions/summarize", {
 			contentSessionId,
 			last_assistant_message: lastAssistantMessage,
@@ -472,9 +578,9 @@ export default function piMemExtension(pi: ExtensionAPI) {
 	// Quick health check — verifies the worker is reachable and shows
 	// current session state.
 	//
-	// FIX-3: add worker URL, port source and dependency-degradation warnings.
-	// Dependency degradation (e.g. missing claude CLI) skips all observations/summarize calls
-	// and is the #1 cause of 'reachable but no memories'; surface it directly in status.
+	// FIX-3: 增加 worker 地址、端口来源、依赖降级告警。
+	// 依赖降级（如 claude CLI 缺失）会让 observations/summarize 全部被跳过，
+	// 是"连得上却没记忆"的头号原因，必须在状态里直接暴露。
 	// =========================================================================
 
 	pi.registerCommand("memory-status", {
@@ -493,14 +599,14 @@ export default function piMemExtension(pi: ExtensionAPI) {
 						.map((s) => s.dependency)
 						.filter((n): n is string => Boolean(n))
 						.join(", ");
-					const depText = deps?.degraded ? `\n⚠️ degraded dependencies: ${depNames || "unknown"}` : "";
+					const depText = deps?.degraded ? `\n⚠️ 依赖降级: ${depNames || "unknown"}` : "";
 
 					const ai = data.ai as { provider?: string } | undefined;
 					const aiText = ai?.provider ? `\nAI provider: ${ai.provider}` : "";
 
 					ctx.ui.notify(
-						`pi-mem: connected to worker v${data.version || "?"} @ ${workerUrl("")} (port from: ${PORT_SOURCE})` +
-							`\nsession: ${contentSessionId || "none"} | project: ${projectName}` +
+						`pi-mem: 已连接 worker v${data.version || "?"} @ ${workerUrl("")} (端口来源: ${PORT_SOURCE})` +
+							`\n会话: ${contentSessionId || "none"} | 项目: ${projectName}` +
 							aiText +
 							depText,
 						"info",
@@ -510,9 +616,9 @@ export default function piMemExtension(pi: ExtensionAPI) {
 				}
 			} catch {
 				ctx.ui.notify(
-					`pi-mem: worker unreachable ${workerUrl("/api/health")}` +
-						`\nport from: ${PORT_SOURCE}` +
-						`\ncheck the actual worker port, or set the CLAUDE_MEM_PORT env var`,
+					`pi-mem: worker 不可达 ${workerUrl("/api/health")}` +
+						`\n端口来源: ${PORT_SOURCE}` +
+						`\n请核对 worker 实际端口，或设置环境变量 CLAUDE_MEM_PORT`,
 					"error",
 				);
 			} finally {

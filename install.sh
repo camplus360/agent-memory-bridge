@@ -21,7 +21,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_ROOT="${CLAUDE_MEM_INSTALL_ROOT:-$HOME/.local/share/claude-mem}"
-WORKER_SH="$SCRIPT_DIR/claude-mem-worker.sh"
+WORKER_PY="$SCRIPT_DIR/claude-mem-worker.py"
 DRY_RUN=0
 TARGET_AGENTS=()
 
@@ -68,11 +68,11 @@ echo
 
 # 1) Always install the unified script (single source of truth)
 run "mkdir -p '$INSTALL_ROOT'"
-run "cp '$WORKER_SH' '$INSTALL_ROOT/claude-mem-worker.sh'"
-run "cp '$SCRIPT_DIR/mem0-worker.sh' '$INSTALL_ROOT/mem0-worker.sh'"
-run "chmod +x '$INSTALL_ROOT/claude-mem-worker.sh' '$INSTALL_ROOT/mem0-worker.sh'"
-echo "[ok] unified script -> $INSTALL_ROOT/claude-mem-worker.sh"
-echo "[ok] mem0 wrapper   -> $INSTALL_ROOT/mem0-worker.sh"
+run "cp '$WORKER_PY' '$INSTALL_ROOT/claude-mem-worker.py'"
+run "cp '$SCRIPT_DIR/mem0-worker.py' '$INSTALL_ROOT/mem0-worker.py'"
+run "chmod +x '$INSTALL_ROOT/claude-mem-worker.py' '$INSTALL_ROOT/mem0-worker.py'"
+echo "[ok] unified script -> $INSTALL_ROOT/claude-mem-worker.py"
+echo "[ok] mem0 wrapper   -> $INSTALL_ROOT/mem0-worker.py"
 
 # Generate the .env template (host/port/timeouts/backend selection)
 ENV_FILE="$INSTALL_ROOT/.env"
@@ -136,19 +136,28 @@ for ag in "${TARGET_AGENTS[@]}"; do
       echo "[ok] opencode plugin -> $DST (register it in your opencode config)"
       ;;
     pi)
-      # pi is an npm package and cannot be overwritten directly;
-      # the reference implementation is staged under the install root.
-      DST="$INSTALL_ROOT/agents/pi"
-      run "mkdir -p '$DST'"
-      run "cp '$SCRIPT_DIR/agents/pi/pi-claude-mem.ts' '$DST/'"
-      run "cp '$SCRIPT_DIR/agents/pi/install.sh' '$DST/' 2>/dev/null || true"
-      echo "[ok] pi reference impl -> $DST (deploy into the pi-agent-memory extension)"
+      # pi is a local-path package: register this repo's agents/pi directory
+      # directly via `pi install <abs path>`. Nothing is copied into node_modules,
+      # and `pi update` never overwrites the code (see agents/pi/DEPLOY.md).
+      PI_PKG="$SCRIPT_DIR/agents/pi"
+      PI_SETTINGS="$HOME/.pi/agent/settings.json"
+      if [ "$DRY_RUN" = "1" ]; then
+        echo "[dry-run] pi install '$PI_PKG'"
+      elif ! command -v pi >/dev/null 2>&1; then
+        echo "[warn] pi not found on PATH; register manually by adding this to" >&2
+        echo "       $PI_SETTINGS packages array:\"$PI_PKG\"" >&2
+      elif grep -qF "\"$PI_PKG\"" "$PI_SETTINGS" 2>/dev/null; then
+        echo "[ok] pi package already registered -> $PI_PKG"
+      else
+        run "pi install '$PI_PKG'"
+        echo "[ok] pi local-path package registered -> $PI_PKG"
+      fi
       ;;
     codebuddy)
       DST="$HOME/.codebuddy"
       run "mkdir -p '$DST'"
       # Render hooks.json.example to hooks.claude-mem.json (never overwrite hooks.json)
-      run "sed 's#/ABS/PATH/agent-memory-bridge/claude-mem-worker.sh#$INSTALL_ROOT/claude-mem-worker.sh#g' '$SCRIPT_DIR/agents/codebuddy/hooks.json.example' > '$DST/hooks.claude-mem.json'"
+      run "sed 's#/ABS/PATH/agent-memory-bridge/claude-mem-worker.py#$INSTALL_ROOT/claude-mem-worker.py#g' '$SCRIPT_DIR/agents/codebuddy/hooks.json.example' > '$DST/hooks.claude-mem.json'"
       echo "[ok] codebuddy hooks -> $DST/hooks.claude-mem.json (merge into settings.json to enable)"
       ;;
     hermes)
@@ -163,5 +172,5 @@ done
 
 echo
 echo "=== done ==="
-echo "unified script: $INSTALL_ROOT/claude-mem-worker.sh"
-echo "make sure the worker is running: bash $INSTALL_ROOT/claude-mem-worker.sh health"
+echo "unified script: $INSTALL_ROOT/claude-mem-worker.py"
+echo "make sure the worker is running: python3 $INSTALL_ROOT/claude-mem-worker.py health"

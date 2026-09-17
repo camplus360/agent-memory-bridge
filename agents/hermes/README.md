@@ -1,6 +1,6 @@
 # Hermes adapter
 
-A Python snippet that records each Hermes conversation turn through the unified `claude-mem-worker.sh` script. It uses only `subprocess` + a background daemon thread (no `requests` dependency), runs asynchronously, and fails silently — it **never blocks the Hermes main flow**.
+A Python snippet that records each Hermes conversation turn through the unified `claude-mem-worker.py` script. It uses only `subprocess` + a background daemon thread (no `requests` dependency), runs asynchronously, and fails silently — it **never blocks the Hermes main flow**.
 
 ## Files
 
@@ -27,7 +27,7 @@ Per turn it performs: `init` (user prompt) -> observation (assistant reply) -> `
 
 ## Configuration
 
-The script path defaults to `~/.local/share/claude-mem/claude-mem-worker.sh` and can be overridden with the `CLAUDE_MEM_WORKER_SH` environment variable or the constant at the top of `engine.py.example`.
+The script path defaults to `~/.local/share/claude-mem/claude-mem-worker.py` and can be overridden with the `CLAUDE_MEM_WORKER_PY` environment variable or the constant at the top of `engine.py.example`.
 
 ## Which entry point to patch
 

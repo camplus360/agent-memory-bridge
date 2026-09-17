@@ -15,10 +15,10 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOCK_PORT=37997
 LOG="/tmp/claude-mem-hooktest.log"
-WORKER_SH="${CLAUDE_MEM_WORKER_SH:-$HOME/.local/share/claude-mem/claude-mem-worker.sh}"
+WORKER_PY="${CLAUDE_MEM_WORKER_PY:-$HOME/.local/share/claude-mem/claude-mem-worker.py}"
 
-if [ ! -f "$WORKER_SH" ]; then
-  WORKER_SH="$SCRIPT_DIR/claude-mem-worker.sh"
+if [ ! -f "$WORKER_PY" ]; then
+  WORKER_PY="$SCRIPT_DIR/claude-mem-worker.py"
 fi
 
 # ---------- start the mock worker ----------
@@ -47,7 +47,7 @@ export CLAUDE_MEM_WORKER_PORT=$MOCK_PORT
 export CLAUDE_MEM_QUIET=1
 
 echo "=== hook trigger test (mock worker :$MOCK_PORT) ==="
-echo "worker script: $WORKER_SH"
+echo "worker script: $WORKER_PY"
 echo
 
 # ---------- 1. Run the commands from hooks.json (mimic CodeBuddy) ----------
@@ -98,16 +98,16 @@ echo
 
 # ---------- 2. Hermes injection points ----------
 echo "[2] Simulate the Hermes engine.py injection points"
-"$WORKER_SH" init hermes "hermes-test-$$" "$(pwd)" "hermesproj" "hermes first message"
-"$WORKER_SH" observation hermes "hermes-test-$$" "Hermes assistant reply" "$(pwd)" assistant_message hermes
-"$WORKER_SH" summarize hermes "hermes-test-$$" "Hermes done" hermes
+python3 "$WORKER_PY" init hermes "hermes-test-$$" "$(pwd)" "hermesproj" "hermes first message"
+python3 "$WORKER_PY" observation hermes "hermes-test-$$" "Hermes assistant reply" "$(pwd)" assistant_message hermes
+python3 "$WORKER_PY" summarize hermes "hermes-test-$$" "Hermes done" hermes
 echo "    -> called init/observation/summarize"
 echo
 
 # ---------- 3. Generic subcommands ----------
 echo "[3] Verify health / search subcommands"
-"$WORKER_SH" health >/dev/null 2>&1 && echo "    -> health fired"
-"$WORKER_SH" search "hook test" 3 >/dev/null 2>&1 && echo "    -> search fired"
+python3 "$WORKER_PY" health >/dev/null 2>&1 && echo "    -> health fired"
+python3 "$WORKER_PY" search "hook test" 3 >/dev/null 2>&1 && echo "    -> search fired"
 echo
 
 # ---------- results ----------

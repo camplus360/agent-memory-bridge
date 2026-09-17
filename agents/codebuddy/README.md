@@ -1,6 +1,6 @@
 # CodeBuddy adapter
 
-CodeBuddy supports Claude-Code-style hooks: each event runs a command and delivers its payload as JSON on stdin. The single command `claude-mem-worker.sh hook codebuddy` parses that payload and forwards it to the worker.
+CodeBuddy supports Claude-Code-style hooks: each event runs a command and delivers its payload as JSON on stdin. The single command `python3 claude-mem-worker.py hook codebuddy` parses that payload and forwards it to the worker.
 
 ## Files
 
@@ -24,10 +24,10 @@ The root installer produces `~/.codebuddy/hooks.claude-mem.json`. Merge its `"ho
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }]
+    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }]
   }
 }
 ```

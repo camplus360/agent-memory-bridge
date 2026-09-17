@@ -1,0 +1,45 @@
+pi-claude-mem
+=============
+
+Self-maintained pi-coding-agent memory extension. This is a fork, not an
+independent reimplementation.
+
+Upstream provenance
+-------------------
+Fork baseline:
+  npm package  : pi-agent-memory@0.3.4
+  publisher    : ArtemisAI
+  adapter repo : https://github.com/ArtemisAI/pi-mem  (subdirectory: pi-agent)
+
+That adapter is itself derived from the OpenClaw plugin shipped with claude-mem:
+  source file  : claude-mem/openclaw/src/index.ts
+  upstream     : https://github.com/thedotmack/claude-mem
+  copyright    : Copyright (C) 2025 Alex Newman (@thedotmack)
+
+The claude-mem *worker backend* is a separate program that this extension only
+talks to over a local HTTP API (default 127.0.0.1). It is NOT contained in, or
+published by, this package. At the time of forking, the worker distribution was
+licensed Apache-2.0; the adapter package we forked from was distributed under
+AGPL-3.0-or-later. We keep the stricter AGPL-3.0-or-later for this adapter
+(see LICENSE), which is valid for an AGPL-licensed baseline.
+
+Modifications by camplus (since 2026-09)
+----------------------------------------
+1. FIX-1: parse worker host/port from both number and numeric-string forms
+   (the upstream code required a number and silently fell back to 37777).
+2. FIX-2: stop calling POST /api/sessions/complete (removed in worker v12.4.4;
+   the worker self-completes, and the external call dropped queued observations).
+3. FIX-3: /memory-status now reports worker URL, port source, and dependency
+   degradation.
+4. FIX-4: log the resolved worker URL at startup.
+5. Renamed the injected context wrapper <pi-mem-context> -> <claude-mem-context>.
+6. De-upstreamed the packaging: package pi-agent-memory -> pi-claude-mem,
+   moved to first-party directory pi-claude-mem/ in this private repo, dropped
+   the npm re-vendor tooling and the remote banner, and bundled the full
+   AGPL text. This package is private (`"private": true`) and is consumed by pi
+   as a local path package; it is not published to any npm registry.
+
+License
+-------
+AGPL-3.0-or-later. The original copyright and license are preserved in LICENSE.
+The above notices must be retained in copies and derivative works.

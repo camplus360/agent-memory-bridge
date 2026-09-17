@@ -46,7 +46,7 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 ```json
 {
   "plugin": [
-    "/ABS/PATH/hook-sh-worker/agents/opencode"
+    "/ABS/PATH/agent-memory-bridge/agents/opencode"
   ]
 }
 ```
@@ -69,14 +69,14 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }]
+    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }]
   }
 }
 ```
-`<ABS>` = `claude-mem-worker.sh` 本机绝对路径（如 `/home/yourname/.local/share/claude-mem/claude-mem-worker.sh`）。
+`<ABS>` = `claude-mem-worker.py` 本机绝对路径（如 `/home/yourname/.local/share/claude-mem/claude-mem-worker.py`）。
 
 | 坑 | 说明 |
 |---|---|
@@ -88,30 +88,32 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 
 ---
 
-## 三、pi（原生扩展，npm 包）
+## 三、pi（原生扩展，本地路径包）
 
-**生效**：`~/.pi/agent/settings.json` 的 `packages` 含 `npm:pi-agent-memory`，包内 `extensions/pi-mem.ts` 与本仓库同步。
+**生效**：`~/.pi/agent/settings.json` 的 `packages` 含本仓库 `agents/pi` 目录的绝对路径。包清单 `pi.extensions` 指向 `extensions/pi-claude-mem.ts`，pi 直接从仓库目录加载——不拷贝、无同步步骤。
 
 ```bash
 # 装 pi（真实包名）
 npm install -g @earendil-works/pi-coding-agent
 export PATH="$HOME/.npm-global/bin:$PATH"
 
-# 装记忆扩展
-pi install npm:pi-agent-memory
+# 以本地路径包注册记忆扩展（在本仓库 clone 内）
+cd agent-memory-bridge/agents/pi
+pi install "$PWD"
 
-# 同步主副本到 npm 包
-cd hook-sh-worker/agents/pi && ./install.sh sync
-
-# 验证
+# 验证（先重启 pi）
 pi > /memory-status
 # 期望: 已连接 worker v13.18.0 @ http://127.0.0.1:37701
 ```
 
+扩展默认 spawn 统一 `claude-mem-worker.py` shim 发起每次 worker 调用
+（`CLAUDE_MEM_TRANSPORT=py`）；设 `CLAUDE_MEM_TRANSPORT=http` 可回退旧的进程内 fetch。
+详见 [`agents/pi/DEPLOY.md`](../../agents/pi/DEPLOY.md)。
+
 | 坑 | 说明 |
 |---|---|
-| 端口 | 实测 37701（非 37777），settings.json 写数字不加引号 |
-| 同步 | 改 pi-mem.ts 需 `./install.sh sync` 覆盖 npm 包副本 |
+| 端口 | 实测 37701（非 37777），settings.json 数字或字符串均可 |
+| 重载 | 改 `.ts` 或 `packages` 路径后必须退出并重开 pi（扩展仅启动时加载一次） |
 | provider | worker 没配 LLM → 连得上但不产生记忆 |
 
 ---
@@ -129,7 +131,7 @@ pi > /memory-status
 **捕获要点**（run_turn.py 里 subprocess 调用）：
 ```python
 if str(user_content or "").strip():        # 必须非空才 init
-    subprocess.run(["bash", _CAPTURE_SCRIPT, "init", "hermes", session_id, cwd, "",
+    subprocess.run([sys.executable, CLAUDE_MEM_WORKER_PY, "init", "hermes", session_id, cwd, "",
                     str(user_content)], ...)   # 第5参=prompt，漏传会被兜底成 [media prompt]
 ```
 

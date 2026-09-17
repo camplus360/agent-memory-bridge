@@ -60,9 +60,9 @@ Claude Code 系 hook 的生命周期事件共 7 个核心（另含 2 个扩展�
 opencode run "请列出 /tmp 目录，然后回复：回测完成"
 
 # codebuddy / 任意 hook 系（模拟生命周期）
-echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"回测测试消息"}' | claude-mem-worker.sh hook codebuddy
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"回测测试消息"}' | python3 claude-mem-worker.py hook codebuddy
 # 再补 Stop 触发总结：
-echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | claude-mem-worker.sh hook codebuddy
+echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | python3 claude-mem-worker.py hook codebuddy
 
 # pi
 pi -p "请只回复：回测测试"

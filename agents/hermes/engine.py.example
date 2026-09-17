@@ -15,12 +15,13 @@ Dependencies: subprocess + a background thread only (no `requests`).
 """
 import os
 import subprocess
+import sys
 import threading
 
 # Unified worker client (single source of truth); overridable via env for deployment.
-CLAUDE_MEM_WORKER_SH = os.environ.get(
-    "CLAUDE_MEM_WORKER_SH",
-    os.path.expanduser("~/.local/share/claude-mem/claude-mem-worker.sh"),
+CLAUDE_MEM_WORKER_PY = os.environ.get(
+    "CLAUDE_MEM_WORKER_PY",
+    os.path.expanduser("~/.local/share/claude-mem/claude-mem-worker.py"),
 )
 
 
@@ -29,7 +30,7 @@ def _run_worker_async(args, timeout=10):
     def _run():
         try:
             subprocess.run(
-                ["bash", CLAUDE_MEM_WORKER_SH, *args],
+                [sys.executable, CLAUDE_MEM_WORKER_PY, *args],
                 timeout=timeout, capture_output=True,
             )
         except Exception:
@@ -53,20 +54,20 @@ def hermes_capture_turn(session_id: str, user_content: str, assistant_text: str)
             #    (5th arg = prompt; never send an empty prompt)
             if user_content.strip():
                 subprocess.run(
-                    ["bash", CLAUDE_MEM_WORKER_SH, "init", "hermes", session_id,
+                    [sys.executable, CLAUDE_MEM_WORKER_PY, "init", "hermes", session_id,
                      cwd, "", user_content],
                     timeout=10, capture_output=True,
                 )
             # 2) Record the assistant reply
             if assistant_text.strip():
                 subprocess.run(
-                    ["bash", CLAUDE_MEM_WORKER_SH, "observation", "hermes", session_id,
+                    [sys.executable, CLAUDE_MEM_WORKER_PY, "observation", "hermes", session_id,
                      assistant_text, cwd, "assistant_message", "hermes"],
                     timeout=10, capture_output=True,
                 )
             # 3) Trigger summarization
             subprocess.run(
-                ["bash", CLAUDE_MEM_WORKER_SH, "summarize", "hermes", session_id, "", "hermes"],
+                [sys.executable, CLAUDE_MEM_WORKER_PY, "summarize", "hermes", session_id, "", "hermes"],
                 timeout=10, capture_output=True,
             )
         except Exception:

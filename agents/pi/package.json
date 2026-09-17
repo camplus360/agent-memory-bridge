@@ -1,0 +1,54 @@
+{
+  "name": "pi-claude-mem",
+  "version": "1.0.0",
+  "description": "Self-maintained pi-coding-agent memory extension: a thin client for the local claude-mem worker HTTP API. Records tool activity, injects relevant past context, and registers a memory_recall search tool.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-skill",
+    "claude-mem",
+    "pi-coding-agent",
+    "memory",
+    "persistent-memory",
+    "cross-session",
+    "cross-engine"
+  ],
+  "author": "camplus",
+  "contributors": [
+    {
+      "name": "Alex Newman (@thedotmack)",
+      "comment": "original author of claude-mem and the OpenClaw plugin this adapter derives from"
+    },
+    {
+      "name": "ArtemisAI",
+      "comment": "original pi-agent adapter, published as pi-agent-memory@0.3.4 (fork baseline)"
+    }
+  ],
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_ORG/agent-memory-bridge.git",
+    "directory": "agents/pi"
+  },
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*"
+  },
+  "files": [
+    "extensions",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ]
+}

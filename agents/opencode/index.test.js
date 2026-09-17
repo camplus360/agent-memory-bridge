@@ -1,12 +1,14 @@
 // Mocked tests for the opencode-claude-mem capture plugin.
 // Run: bun test index.test.js   (or: node index.test.js)
 //
-// No real worker required: a fetch mock records every request and asserts:
-//   1. an assistant text part (flushed on message.updated) -> POST /api/sessions/observations
-//   2. a user chat.message -> POST /api/sessions/init, never an observation
-//   3. session.idle -> POST /api/sessions/summarize (dedupe lock: repeat idle fires once)
-//   4. the claude_mem_search tool -> GET /api/search/observations
-//   5. worker flakiness -> exponential-backoff retries; ECONNREFUSED -> give up immediately
+// These are transport-level unit tests: they assert the event -> endpoint
+// mapping (init/observation/summarize), dedupe and retry against a fetch mock,
+// so they pin the mockable in-process HTTP transport. The production default is
+// the spawned claude-mem-worker.py shim (CLAUDE_MEM_TRANSPORT=py), which is
+// covered by real E2E; force http here so every request goes through the mock.
+// This MUST be set before the dynamic import() below (TRANSPORT is read once at
+// module load).
+process.env.CLAUDE_MEM_TRANSPORT = "http";
 
 let served = []; // {method, path, body}
 let toastCalls = [];

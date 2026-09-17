@@ -60,9 +60,9 @@ Send a real message using the agent's trigger method:
 opencode run "list the /tmp directory, then reply: regression done"
 
 # codebuddy / any hook-style agent (simulate the lifecycle)
-echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"regression test message"}' | claude-mem-worker.sh hook codebuddy
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"regression test message"}' | python3 claude-mem-worker.py hook codebuddy
 # then send Stop to trigger summarization:
-echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | claude-mem-worker.sh hook codebuddy
+echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | python3 claude-mem-worker.py hook codebuddy
 
 # pi
 pi -p "reply with only: regression test"

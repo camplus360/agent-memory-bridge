@@ -14,7 +14,7 @@ If you run several AI coding agents — OpenCode, CodeBuddy, pi, Hermes — each
 
 **agent-memory-bridge** collapses all of that into a **single source of truth**:
 
-- one unified script (`claude-mem-worker.sh`) speaks the exact worker protocol;
+- one unified script (`claude-mem-worker.py`) speaks the exact worker protocol;
 - every agent has a tiny adapter that only captures events and delegates to that script;
 - a failed capture **never blocks your agent** — hooks return instantly and degrade silently.
 
@@ -36,7 +36,7 @@ flowchart LR
     subgraph Agents
         OC[OpenCode<br/>native plugin]
         CB[CodeBuddy<br/>hooks.json]
-        PI[pi<br/>pi-agent-memory extension]
+        PI[pi<br/>local-path extension]
         HM[Hermes<br/>engine.py snippet]
     end
 
@@ -45,7 +45,7 @@ flowchart LR
     PI --> W
     HM -->|subprocess| W
 
-    W["claude-mem-worker.sh<br/>(single source of truth)<br/>init / observation / summarize / search"]
+    W["claude-mem-worker.py<br/>(single source of truth)<br/>init / observation / summarize / search"]
 
     W -->|CLAUDE_MEM_BACKEND=claude-mem| CM["claude-mem worker :37701<br/>LLM summary + embeddings"]
     W -->|CLAUDE_MEM_BACKEND=mem0| M0["mem0 :8000<br/>POST /memories + /search"]
@@ -80,12 +80,12 @@ cd agent-memory-bridge
 ./install.sh --dry-run             # preview every action without writing
 ```
 
-The installer copies `claude-mem-worker.sh` to `~/.local/share/claude-mem/`, writes a `.env` / `.env.example` template, and places each chosen adapter in the agent's real config location. Override the root with `--prefix` or `CLAUDE_MEM_INSTALL_ROOT`.
+The installer copies `claude-mem-worker.py` to `~/.local/share/claude-mem/`, writes a `.env` / `.env.example` template, and places each chosen adapter in the agent's real config location. Override the root with `--prefix` or `CLAUDE_MEM_INSTALL_ROOT`.
 
 ### Verify
 
 ```bash
-bash ~/.local/share/claude-mem/claude-mem-worker.sh health   # backend reachable
+python3 ~/.local/share/claude-mem/claude-mem-worker.py health   # backend reachable
 ./test-hooks.sh                                              # exercise every hook with a mock worker
 ```
 
@@ -95,8 +95,8 @@ Then follow the **one-time enable step** for your agent (register the plugin, me
 
 | Agent | Adapter | Integration style | Via unified script |
 |---|---|---|---|
-| **OpenCode** | [`agents/opencode`](./agents/opencode) | native plugin, built-in `fetch`, unit tests | no (identical fields) |
-| **pi** | [`agents/pi`](./agents/pi) | patched `pi-agent-memory` npm extension, native `fetch` | no (identical fields) |
+| **OpenCode** | [`agents/opencode`](./agents/opencode) | native plugin with unit tests; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
+| **pi** | [`agents/pi`](./agents/pi) | native TS extension loaded as a **local-path package**; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
 | **CodeBuddy** | [`agents/codebuddy`](./agents/codebuddy) | `hooks.json` command hooks, JSON on stdin | **yes** |
 | **Hermes** | [`agents/hermes`](./agents/hermes) | `engine.py` subprocess snippet | **yes** |
 
@@ -113,24 +113,24 @@ Set `CLAUDE_MEM_BACKEND` (default `claude-mem`):
 | `both` | dual-write to both stores |
 
 ```bash
-CLAUDE_MEM_BACKEND=mem0 claude-mem-worker.sh observation codebuddy s1 "..." /tmp user_prompt codebuddy
-CLAUDE_MEM_BACKEND=both claude-mem-worker.sh search "keyword" 5
+CLAUDE_MEM_BACKEND=mem0 python3 claude-mem-worker.py observation codebuddy s1 "..." /tmp user_prompt codebuddy
+CLAUDE_MEM_BACKEND=both python3 claude-mem-worker.py search "keyword" 5
 ```
 
-`mem0-worker.sh` is a thin wrapper equivalent to `CLAUDE_MEM_BACKEND=mem0`. mem0 variables: `MEM0_HOST` (localhost), `MEM0_PORT` (8000), `MEM0_API_KEY` (optional), `MEM0_USER_ID` ($USER), `MEM0_INFER` (true), or a full `MEM0_BASE_URL`.
+`mem0-worker.py` is a thin wrapper equivalent to `CLAUDE_MEM_BACKEND=mem0`. mem0 variables: `MEM0_HOST` (localhost), `MEM0_PORT` (8000), `MEM0_API_KEY` (optional), `MEM0_USER_ID` ($USER), `MEM0_INFER` (true), or a full `MEM0_BASE_URL`.
 
 > **mem0 tenancy pitfall:** an API key is bound to a specific user view. Writes and searches must use the same view, or a stored memory will never show up in search.
 
 ## Unified script reference
 
 ```bash
-claude-mem-worker.sh init        <agent> <sessionId> [cwd] [project] [prompt]
-claude-mem-worker.sh observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
-claude-mem-worker.sh summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
-claude-mem-worker.sh turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
-claude-mem-worker.sh search      <query> [limit]
-claude-mem-worker.sh health
-claude-mem-worker.sh hook        <agent>   # reads Claude Code/CodeBuddy hook JSON from stdin
+python3 claude-mem-worker.py init        <agent> <sessionId> [cwd] [project] [prompt]
+python3 claude-mem-worker.py observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
+python3 claude-mem-worker.py summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
+python3 claude-mem-worker.py turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
+python3 claude-mem-worker.py search      <query> [limit]
+python3 claude-mem-worker.py health
+python3 claude-mem-worker.py hook        <agent>   # reads Claude Code/CodeBuddy hook JSON from stdin
 ```
 
 `hook` maps stdin events automatically:
@@ -150,7 +150,7 @@ Environment overrides: `CLAUDE_MEM_WORKER_HOST` (127.0.0.1), `CLAUDE_MEM_WORKER_
 - [docs/CONFIG-REFERENCE.md](./docs/CONFIG-REFERENCE.md) — copy-ready config snapshots + pitfalls per agent
 - [docs/AGENT-RUNTIME-ARCH.md](./docs/AGENT-RUNTIME-ARCH.md) — the worker's two data paths (REST storage vs. Claude-CLI-based compression)
 - [docs/REGRESSION-TEST-STANDARD.md](./docs/REGRESSION-TEST-STANDARD.md) — acceptance baseline: hook events, recall and summaries
-- [agents/pi/DEPLOY.md](./agents/pi/DEPLOY.md) — deploying the patched pi-agent-memory extension
+- [agents/pi/DEPLOY.md](./agents/pi/DEPLOY.md) — deploying the pi local-path memory extension
 
 > Chinese originals of the four guides are kept under [`docs/zh/`](./docs/zh).
 

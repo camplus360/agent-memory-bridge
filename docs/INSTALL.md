@@ -2,7 +2,7 @@
 
 > Goal: automatically capture conversation memory from **OpenCode / CodeBuddy / pi / Hermes**
 > and write it into one local claude-mem worker (`127.0.0.1:37701`).
-> All agents go through the unified `claude-mem-worker.sh` in this repository
+> All agents go through the unified `claude-mem-worker.py` in this repository
 > (OpenCode/pi ship native reference implementations with identical fields).
 
 ---
@@ -11,7 +11,7 @@
 
 ```
   opencode  ─┐
-  CodeBuddy ─┼─► claude-mem-worker.sh (single source of truth) ─► claude-mem worker :37701 ─► SQLite + Chroma
+  CodeBuddy ─┼─► claude-mem-worker.py (single source of truth) ─► claude-mem worker :37701 ─► SQLite + Chroma
   pi        ─┤      (init/observation/summarize)                     (summary/embedding/search)
   Hermes    ─┘
 ```
@@ -29,7 +29,7 @@
 ```bash
 git clone <repo-url> agent-memory-bridge
 cd agent-memory-bridge
-ls                      # claude-mem-worker.sh  install.sh  README.md  agents/
+ls                      # claude-mem-worker.py  install.sh  README.md  agents/
 ```
 
 ### 1.2 Install and start the claude-mem worker
@@ -111,7 +111,7 @@ cd agent-memory-bridge
 ```
 
 `install.sh` will:
-1. copy `claude-mem-worker.sh` into the install root (default `~/.local/share/claude-mem/`);
+1. copy `claude-mem-worker.py` into the install root (default `~/.local/share/claude-mem/`);
 2. generate the `.env` template (host/port/timeouts/retries);
 3. place each chosen adapter in its real location (table below).
 
@@ -185,37 +185,36 @@ Verified working config (four events, all pointing at the unified script):
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABSOLUTE>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }]
+    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABSOLUTE>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }]
   }
 }
 ```
 
-`<ABSOLUTE>` is the machine's absolute path to `claude-mem-worker.sh` (e.g. `/home/yourname/.local/share/claude-mem/claude-mem-worker.sh`).
+`<ABSOLUTE>` is the machine's absolute path to `claude-mem-worker.py` (e.g. `/home/yourname/.local/share/claude-mem/claude-mem-worker.py`).
 
 ---
 
-### 3.3 pi (native extension, npm package)
+### 3.3 pi (native extension, local-path package)
 
-pi is an npm package and cannot be overwritten directly. Follow [`agents/pi/DEPLOY.md`](../agents/pi/DEPLOY.md). Key points:
+pi loads the extension straight from this repo as a **local-path package** —
+nothing is copied into `node_modules` and there is no sync step. Follow
+[`agents/pi/DEPLOY.md`](../agents/pi/DEPLOY.md). Key points:
 
 ```bash
 # 1) Install pi (the real package name is @earendil-works/pi-coding-agent)
 npm install -g @earendil-works/pi-coding-agent
 export PATH="$HOME/.npm-global/bin:$PATH"     # otherwise `pi` is command not found
 
-# 2) Install the memory extension
-pi install npm:pi-agent-memory
-#    confirm ~/.pi/agent/settings.json packages contains "npm:pi-agent-memory"
-
-# 3) Sync this repo's master copy into the npm package (replace extensions/pi-claude-mem.ts)
+# 2) Register this repo's agents/pi dir as a local-path package
 cd agent-memory-bridge/agents/pi
-./install.sh sync        # pi-claude-mem.ts -> ~/.pi/agent/npm/node_modules/pi-agent-memory/extensions/pi-claude-mem.ts
-./install.sh status      # confirm synced
+pi install "$PWD"
+#    confirm ~/.pi/agent/settings.json packages now contains the absolute
+#    path .../agent-memory-bridge/agents/pi
 
-# 4) Restart pi and verify
+# 3) Restart pi and verify (the extension loads once at startup)
 pi
 > /memory-status
 # expected: connected to worker v13.18.0 @ http://127.0.0.1:37701
@@ -239,7 +238,7 @@ hermes_capture_turn(session_id, user_text, assistant_text)
 ```
 
 The call runs on a background thread and fails silently — it **never blocks the Hermes main flow**.
-Set the script's absolute path via the `CLAUDE_MEM_WORKER_SH` env var or the constant at the top of `engine.py.example`.
+Set the script's absolute path via the `CLAUDE_MEM_WORKER_PY` env var or the constant at the top of `engine.py.example`.
 
 > Two Hermes capture points may exist depending on your deployment: the Web UI engine and the message gateway (`gateway/run_turn.py`). The gateway is the one used by `hermes gateway run`; patch the entry your deployment actually executes and restart that service.
 
@@ -248,12 +247,12 @@ Set the script's absolute path via the `CLAUDE_MEM_WORKER_SH` env var or the con
 ## 4. Unified script reference (for any shell-based agent)
 
 ```bash
-claude-mem-worker.sh init        <agent> <sessionId> [cwd] [project] [prompt]
-claude-mem-worker.sh observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
-claude-mem-worker.sh summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
-claude-mem-worker.sh turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
-claude-mem-worker.sh search      <query> [limit]
-claude-mem-worker.sh health
+python3 claude-mem-worker.py init        <agent> <sessionId> [cwd] [project] [prompt]
+python3 claude-mem-worker.py observation <agent> <sessionId> <text> [cwd] [toolName] [platformSource]
+python3 claude-mem-worker.py summarize   <agent> <sessionId> [lastAssistantMessage] [platformSource]
+python3 claude-mem-worker.py turn        <agent> <sessionId> <transcriptPath> [cwd] [platformSource]
+python3 claude-mem-worker.py search      <query> [limit]
+python3 claude-mem-worker.py health
 ```
 
 `<agent>` identifies the source (`codebuddy` / `hermes` / ...) and is prepended to form `${agent}-${sessionId}`.
@@ -270,7 +269,7 @@ When the worker is unreachable the script **silently exits 0**; it never blocks 
 ### 5.1 Smoke test (no real conversation needed)
 
 ```bash
-W=~/.local/share/claude-mem/claude-mem-worker.sh
+W="python3 ~/.local/share/claude-mem/claude-mem-worker.py"
 for a in opencode codebuddy pi hermes; do
   $W init $a s1 /tmp
   $W observation $a s1 "test text $a" /tmp assistant_message $a
@@ -318,6 +317,6 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=your-keyword&limit
 
 # opencode: remove the plugin dir from the plugin array in opencode.json
 # CodeBuddy: remove the matching command from settings.json hooks
-# pi:        pi uninstall npm:pi-agent-memory
+# pi:        pi remove /abs/path/agent-memory-bridge/agents/pi
 # Hermes:    remove the injected function calls from engine.py
 ```

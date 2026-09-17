@@ -70,14 +70,14 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }],
-    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "<ABS>/claude-mem-worker.sh hook codebuddy", "timeout": 10000 }] }]
+    "SessionStart":     [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "PostToolUse":      [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }],
+    "Stop":             [{ "matcher": "", "hooks": [{ "type": "command", "command": "python3 <ABS>/claude-mem-worker.py hook codebuddy", "timeout": 10000 }] }]
   }
 }
 ```
-`<ABS>` = the machine's absolute path to `claude-mem-worker.sh` (e.g. `/home/yourname/.local/share/claude-mem/claude-mem-worker.sh`).
+`<ABS>` = the machine's absolute path to `claude-mem-worker.py` (e.g. `/home/yourname/.local/share/claude-mem/claude-mem-worker.py`).
 
 | Pitfall | Explanation |
 |---|---|
@@ -89,30 +89,32 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 
 ---
 
-## 3. pi (native extension, npm package)
+## 3. pi (native extension, local-path package)
 
-**Effective:** the `packages` array of `~/.pi/agent/settings.json` contains `npm:pi-agent-memory`; the package's `extensions/pi-mem.ts` is kept in sync with this repository.
+**Effective:** the `packages` array of `~/.pi/agent/settings.json` contains the absolute path to this repo's `agents/pi` directory. The package's `pi.extensions` manifest points at `extensions/pi-claude-mem.ts`, which pi loads directly from the repo — no copy, no sync step.
 
 ```bash
 # Install pi (the real package name)
 npm install -g @earendil-works/pi-coding-agent
 export PATH="$HOME/.npm-global/bin:$PATH"
 
-# Install the memory extension
-pi install npm:pi-agent-memory
+# Register the memory extension as a local-path package (from a clone of this repo)
+cd agent-memory-bridge/agents/pi
+pi install "$PWD"
 
-# Sync the master copy into the npm package
-cd agent-memory-bridge/agents/pi && ./install.sh sync
-
-# Verify
+# Verify (restart pi first)
 pi > /memory-status
 # expected: connected to worker v13.18.0 @ http://127.0.0.1:37701
 ```
 
+By default the extension spawns the unified `claude-mem-worker.py` shim for every
+worker call (`CLAUDE_MEM_TRANSPORT=py`); set `CLAUDE_MEM_TRANSPORT=http` to use the
+legacy in-process fetch. See [`agents/pi/DEPLOY.md`](../agents/pi/DEPLOY.md).
+
 | Pitfall | Explanation |
 |---|---|
-| Port | Verified 37701 (not 37777); write it as a number (no quotes) in settings.json |
-| Sync | After editing pi-mem.ts you must run `./install.sh sync` to overwrite the npm package copy |
+| Port | Verified 37701 (not 37777); the extension accepts a number or string in settings.json |
+| Reload | Editing the `.ts` or the `packages` path requires quitting and relaunching pi (the extension loads once at startup) |
 | Provider | If the worker has no LLM configured -> it connects but produces no memory |
 
 ---
@@ -130,7 +132,7 @@ pi > /memory-status
 **Capture key point** (subprocess call inside run_turn.py):
 ```python
 if str(user_content or "").strip():        # init only when non-empty
-    subprocess.run(["bash", _CAPTURE_SCRIPT, "init", "hermes", session_id, cwd, "",
+    subprocess.run([sys.executable, CLAUDE_MEM_WORKER_PY, "init", "hermes", session_id, cwd, "",
                     str(user_content)], ...)   # 5th arg = prompt; if omitted the worker falls back to [media prompt]
 ```
 

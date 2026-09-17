@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 // opencode-claude-mem: capture-only plugin for claude-mem.
 //
 // Responsibility (capture and send only; no summarization):
@@ -32,11 +34,69 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 const POST_MAX_RETRIES = 3;
 const POST_BACKOFF_MS = [2000, 4000, 8000];
 
-async function workerPost(path, body, attempt = 0) {
-  // Always tag the source as opencode, otherwise the worker defaults it to claude and source stats are wrong.
-  const payload = body && typeof body === "object" && !body.platformSource
-    ? { ...body, platformSource: "opencode" }
-    : body;
+// ---- Transport: unified claude-mem-worker.py vs in-process fetch ------------
+// CLAUDE_MEM_TRANSPORT=py (default): every call is proxied through the unified
+//   claude-mem-worker.py `api` passthrough (spawned), i.e. opencode -> .py -> worker.
+// CLAUDE_MEM_TRANSPORT=http: force the original direct-fetch path.
+// Either way, if the .py shim is missing / exits non-zero / cannot reach the
+// worker, the call transparently falls back to direct fetch, so memory capture
+// is never broken by the migration. Override the shim path with CLAUDE_MEM_WORKER_PY.
+const TRANSPORT = (process.env.CLAUDE_MEM_TRANSPORT || "py").toLowerCase();
+const WORKER_PY =
+  process.env.CLAUDE_MEM_WORKER_PY ||
+  (process.env.HOME ? `${process.env.HOME}/.local/share/claude-mem/claude-mem-worker.py` : "");
+const PY_CALL_TIMEOUT_MS = 15000;
+
+// Call the .py shim. Resolves { ok, text } on delivery, or null on any failure
+// (missing interpreter/script, timeout, unreachable worker -> exit 4, etc.).
+function callWorkerPy(method, path, body) {
+  return new Promise((resolve) => {
+    if (!WORKER_PY) return resolve(null);
+    let child;
+    try {
+      child = spawn("python3", [WORKER_PY, "api", method, path], {
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+    } catch {
+      return resolve(null);
+    }
+    const chunks = [];
+    let settled = false;
+    const finish = (v) => {
+      if (!settled) {
+        settled = true;
+        resolve(v);
+      }
+    };
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {}
+      finish(null);
+    }, PY_CALL_TIMEOUT_MS);
+    child.stdout.on("data", (d) => chunks.push(d));
+    child.on("error", () => {
+      clearTimeout(timer);
+      finish(null);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      finish(code === 0 ? { ok: true, text: Buffer.concat(chunks).toString("utf8") } : null);
+    });
+    try {
+      if (method === "POST" && body !== undefined) {
+        child.stdin.end(Buffer.from(JSON.stringify(body), "utf8"));
+      } else {
+        child.stdin.end();
+      }
+    } catch {
+      clearTimeout(timer);
+      finish(null);
+    }
+  });
+}
+
+async function workerPostHttp(path, payload, attempt = 0) {
   try {
     const res = await fetch(`${workerBase()}${path}`, {
       method: "POST",
@@ -58,14 +118,14 @@ async function workerPost(path, body, attempt = 0) {
         `[claude-mem] Worker POST ${path} failed (attempt ${attempt + 1}): ${msg} — retrying`
       );
       await new Promise((r) => setTimeout(r, POST_BACKOFF_MS[attempt] ?? 8000));
-      return workerPost(path, payload, attempt + 1);
+      return workerPostHttp(path, payload, attempt + 1);
     }
     console.warn(`[claude-mem] Worker POST ${path} failed: ${msg}`);
     return false;
   }
 }
 
-async function workerGet(path) {
+async function workerGetHttp(path) {
   try {
     const res = await fetch(`${workerBase()}${path}`, { headers: JSON_HEADERS });
     if (!res.ok) {
@@ -80,6 +140,29 @@ async function workerGet(path) {
     }
     return null;
   }
+}
+
+async function workerPost(path, body, attempt = 0) {
+  // Always tag the source as opencode, otherwise the worker defaults it to claude and source stats are wrong.
+  const payload = body && typeof body === "object" && !body.platformSource
+    ? { ...body, platformSource: "opencode" }
+    : body;
+  if (TRANSPORT === "py") {
+    const r = await callWorkerPy("POST", path, payload);
+    if (r?.ok) return true;
+    // Shim failed/missing -> fall back to direct fetch for this call (and its retries).
+    return workerPostHttp(path, payload, 0);
+  }
+  return workerPostHttp(path, payload, attempt);
+}
+
+async function workerGet(path) {
+  if (TRANSPORT === "py") {
+    const r = await callWorkerPy("GET", path, undefined);
+    if (r) return r.text;
+    return workerGetHttp(path);
+  }
+  return workerGetHttp(path);
 }
 
 // opencode sessionID -> claude-mem contentSessionId (matches the official shim)

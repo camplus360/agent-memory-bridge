@@ -1,24 +1,28 @@
-# pi-agent-memory x claude-mem Deployment Guide
+# pi-claude-mem × claude-mem Deployment Guide
 
-> Purpose: reproduce a complete pi-agent-memory + claude-mem environment on a new machine.
-> Companion files: the master copy `pi-claude-mem.ts`, the sync helper `install.sh`, and the patch `pi-claude-mem.patch` (for review / cherry-pick).
+> Purpose: reproduce a complete pi + claude-mem environment on a new machine and
+> load this directory as pi's memory extension.
+> This package is a **local-path package** (not an npm registry package); there is
+> no `node_modules` patch/sync step.
 
 ---
 
 ## 1. Environment
 
-| Component | Reference version | Typical path |
+| Component | Reference version | Typical path / note |
 |---|---|---|
-| Node.js | v24.x | `/usr/bin/node` |
-| Bun | 1.4.x | `~/.bun/bin/bun` |
-| pi (pi-coding-agent) | 0.84.x | `~/.npm-global/bin/pi` -> `~/.npm-global/lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js` |
-| pi-agent-memory | 0.3.x | `~/.pi/agent/npm/node_modules/pi-agent-memory` |
+| Node.js | v20+ (tested v24) | `node --version` |
+| Bun (optional) | 1.4.x | only needed to run the OpenCode tests / build TS |
+| pi | `@earendil-works/pi-coding-agent` 0.85+ | `~/.npm-global/bin/pi` |
 | claude-mem worker | 13.18.x | the claude-mem plugin's `scripts/worker-service.cjs` |
 | claude-mem data | — | `~/.claude-mem/` (db, logs, settings) |
 
-> **pi's real package name** is `@earendil-works/pi-coding-agent`, while pi-agent-memory's peerDependencies list `@mariozechner/pi-coding-agent`. The extension APIs are compatible and it loads fine, but make sure you install the `earendil-works` package.
+> The extension's peer dependencies are named `@mariozechner/pi-coding-agent`
+> and `@mariozechner/pi-ai`; the `@earendil-works` pi distribution exposes the
+> same extension API and loads the package as-is.
 
-> **PATH pitfall:** `~/.npm-global/bin` is not on PATH by default, so typing `pi` gives `command not found`. Run:
+> **PATH pitfall:** if typing `pi` gives `command not found`, add the global bin
+> dir to PATH:
 >
 > ```bash
 > export PATH="$HOME/.npm-global/bin:$PATH"   # consider adding to ~/.bashrc
@@ -26,236 +30,179 @@
 
 ---
 
-## 2. pi configuration
-
-### `~/.pi/agent/settings.json`
-
-```json
-{
-  "theme": "dark",
-  "defaultProvider": "your-provider",
-  "defaultModel": "your-model",
-  "defaultProjectTrust": "ask",
-  "packages": [
-    "npm:pi-agent-memory"
-  ]
-}
-```
-
-Key entries:
-
-| Field | Value | Notes |
-|---|---|---|
-| `packages` | npm packages | `npm:pi-agent-memory` is this plugin; pi auto-loads it at startup |
-| `defaultProvider` / `defaultModel` | provider/model | pi's own model config (unrelated to the memory plugin's LLM) |
-
-### pi directory layout
-
-```
-~/.pi/agent/
-├── settings.json              # config above
-├── auth.json                  # credentials
-├── models.json / models-store.json
-├── npm/node_modules/          # packages installed via `pi install` (includes pi-agent-memory)
-├── skills/                    # user-level skills
-└── sessions/                  # session data
-```
-
-> pi-agent-memory's bundled `mem-search` skill is declared via the `pi.skills` field in the package's `package.json`
-> and loaded by pi directly from the package directory — **no need** to copy it into `~/.pi/agent/skills/`.
-
-### Package layout (pi-agent-memory)
-
-```
-pi-agent-memory/
-├── package.json          # pi.extensions=["./extensions"], pi.skills=["./skills"]
-├── extensions/
-│   └── pi-claude-mem.ts  # <- the extension body (deployment target, overwritten by the master copy)
-├── skills/
-│   └── mem-search/SKILL.md
-└── README.md
-```
-
----
-
-## 3. claude-mem configuration
-
-### Key entries (`~/.claude-mem/settings.json`)
-
-| Entry | Example | Notes |
-|---|---|---|
-| `CLAUDE_MEM_WORKER_PORT` | `37701` (a **number**) | Worker listen port; must match what the plugin resolves |
-| `CLAUDE_MEM_WORKER_HOST` | `127.0.0.1` | |
-| `CLAUDE_MEM_PROVIDER` | `openrouter` | AI provider (`claude` / `openrouter` / `gemini`) |
-| `CLAUDE_MEM_OPENROUTER_BASE_URL` | `https://your-openai-compatible-endpoint/v1` | Any OpenAI-compatible base URL |
-| `CLAUDE_MEM_OPENROUTER_MODEL` | `your-model` | |
-| `CLAUDE_MEM_OPENROUTER_API_KEY` | `""` (empty) | **Must be filled**, otherwise AI summarization does not work |
-| `CLAUDE_CODE_PATH` | `""` (empty) | If using the claude provider, point it at the claude executable |
-| `CLAUDE_MEM_DATA_DIR` | `/home/yourname/.claude-mem` | |
-| `CLAUDE_MEM_CHROMA_ENABLED` | `true` | Vector retrieval |
-| `CLAUDE_MEM_CHROMA_PORT` | `8000` | |
-| `CLAUDE_MEM_QUEUE_ENGINE` | `sqlite` | |
-| `CLAUDE_MEM_MODE` | `code` | |
-
-### Two mandatory configuration constraints
-
-1. **settings.json must be valid JSON** — no `//` comments.
-   claude-mem itself parses JSONC and tolerates comments, but pi-agent-memory uses standard `JSON.parse`;
-   on parse failure it silently falls back to the default port 37777.
-
-2. **Write `CLAUDE_MEM_WORKER_PORT` as a number** (`37701`, not `"37701"`).
-   The original plugin's type check requires `number`; a string triggers the fallback. (The master copy fixes this,
-   but keeping the numeric form stays compatible with unpatched versions.)
-
----
-
-## 4. Deploy from scratch
-
-### Step 1: install pi
+## 2. Install pi
 
 ```bash
 npm install -g @earendil-works/pi-coding-agent
 export PATH="$HOME/.npm-global/bin:$PATH"
-pi --version          # should print your installed version
+pi --version
 ```
 
-### Step 2: install claude-mem and start the worker
+pi keeps its config under `~/.pi/agent/`; the memory extension is listed in the
+`packages` array of `~/.pi/agent/settings.json`.
+
+---
+
+## 3. Install claude-mem and start the worker
 
 ```bash
 npx claude-mem install
-# confirm the worker is up:
-ss -tlnp | grep bun
+# confirm the worker is up (default port is 37701, not the extension's 37777 fallback):
 curl -s http://127.0.0.1:37701/api/health
-```
-
-Record the worker's actual port (**usually not 37777**):
-
-```bash
+ss -tlnp | grep -E '37701|bun'
 grep -E "CLAUDE_MEM_WORKER_(PORT|HOST)" ~/.claude-mem/settings.json
 ```
 
-### Step 3: configure the claude-mem AI provider
+### Configure the AI provider (required for memories to be generated)
 
-Choose one:
+Reachable worker + **no AI provider** means observations are stored but never
+summarized. Configure one of:
 
 ```bash
-# A. openrouter / any OpenAI-compatible endpoint
-#    edit ~/.claude-mem/settings.json and fill CLAUDE_MEM_OPENROUTER_API_KEY + BASE_URL + MODEL
+# A. any OpenAI-compatible endpoint:
+#    edit ~/.claude-mem/settings.json and set
+#    CLAUDE_MEM_OPENROUTER_API_KEY + CLAUDE_MEM_OPENROUTER_BASE_URL + CLAUDE_MEM_OPENROUTER_MODEL
 
-# B. claude provider — install the CLI first
+# B. claude provider — install the CLI first (or set CLAUDE_CODE_PATH):
 npm install -g @anthropic-ai/claude-code@latest
-# and/or set CLAUDE_CODE_PATH in settings.json
 ```
 
-**Without a provider, AI summarization and memory compression are all skipped** — the worker is reachable but produces no memories.
-
-Restart the worker for the config to take effect.
-
-### Step 4: install the plugin
+Restart the worker after changing settings:
 
 ```bash
-pi install npm:pi-agent-memory
+curl -X POST http://127.0.0.1:37701/api/admin/restart
 ```
 
-Confirm `npm:pi-agent-memory` appears in the `packages` array of `~/.pi/agent/settings.json`.
+### Key `~/.claude-mem/settings.json` entries
 
-### Step 5: sync the master copy (apply local fixes)
+| Entry | Example | Notes |
+|---|---|---|
+| `CLAUDE_MEM_WORKER_PORT` | `37701` | Worker listen port |
+| `CLAUDE_MEM_WORKER_HOST` | `127.0.0.1` | |
+| `CLAUDE_MEM_CHROMA_ENABLED` | `true` | Vector retrieval |
+| `CLAUDE_MEM_QUEUE_ENGINE` | `sqlite` | |
+| `CLAUDE_MEM_MODE` | `code` | |
 
-```bash
-cd agent-memory-bridge/agents/pi
-./install.sh sync        # pi-claude-mem.ts -> the pi deployment location
-./install.sh status      # confirm synced
-```
-
-Sync target:
-
-```
-~/.pi/agent/npm/node_modules/pi-agent-memory/extensions/pi-claude-mem.ts
-```
-
-### Step 6: restart pi and verify
-
-```bash
-pi
-> /memory-status
-```
-
-Expected output (enhanced master copy):
-
-```
-pi-mem: connected to worker v13.18.0 @ http://127.0.0.1:37701 (port source: settings.json)
-session: pi-<project>-<ts> | project: pi-<project>
-AI provider: openrouter
-```
-
-If it shows a `claude_cli` dependency-degraded warning, Step 3 was not completed.
+> `settings.json` may contain comments for claude-mem itself, but this extension
+> parses it with standard `JSON.parse`; on failure it silently falls back to the
+> default port `37777`. If you rely on the settings-file port, keep it valid JSON.
+> The maintained extension accepts the port in **both number and string form**
+> (FIX-1), so `"37701"` works here.
 
 ---
 
-## 5. Verification checklist
+## 4. Load this extension as a local-path package
+
+From the `agents/pi` directory of a clone of this repo:
 
 ```bash
-# 1. worker health
+cd /path/to/agent-memory-bridge/agents/pi
+pi install "$PWD"
+```
+
+This appends the absolute path to the `packages` array:
+
+```json
+{
+  "packages": [
+    "/path/to/agent-memory-bridge/agents/pi"
+  ]
+}
+```
+
+pi reads the package manifest to find the resources:
+
+```json
+{
+  "pi": { "extensions": ["./extensions"], "skills": ["./skills"] }
+}
+```
+
+so both the extension and the bundled `mem-search` skill load directly from this
+directory. No files are copied into `node_modules`, and `pi update` never
+overwrites the code.
+
+### Alternative: edit settings.json manually
+
+Add the absolute path to `packages` yourself, then restart pi. Relative paths
+are resolved against `~/.pi/agent/npm/`; prefer an absolute path.
+
+---
+
+## 5. Restart pi and verify
+
+Launch pi. At startup it prints the resolved worker URL:
+
+```
+[pi-claude-mem] worker → http://127.0.0.1:37701 (port source: settings.json)
+```
+
+Run the slash command:
+
+```
+/memory-status
+```
+
+Expected: worker v13.18.x reachable, `degraded: false`, project derived from
+cwd. A `claude_cli` dependency-degraded warning means step 3's AI provider is
+not configured.
+
+The `memory_recall` tool is also registered (the `mem-search` skill tells the
+model when to call it).
+
+---
+
+## 6. Verification checklist
+
+```bash
+# 1. worker health (look for "status":"ok", "degraded":false)
 curl -s http://127.0.0.1:37701/api/health
 
-# 2. actual worker port
-ss -tlnp | grep bun
+# 2. extension is registered
+grep -n 'agents/pi' ~/.pi/agent/settings.json
 
-# 3. plugin synced
-cd agent-memory-bridge/agents/pi && ./install.sh status
-
-# 4. sessions written correctly (platform_source should be pi-agent)
+# 3. sessions are being written with the pi-agent source (run a pi turn first)
 node -e '
-const {DatabaseSync}=require("node:sqlite");
-const db=new DatabaseSync(process.env.HOME+"/.claude-mem/claude-mem.db",{readOnly:true});
+const { DatabaseSync } = require("node:sqlite");
+const db = new DatabaseSync(process.env.HOME + "/.claude-mem/claude-mem.db", { readOnly: true });
 console.table(db.prepare("SELECT id,project,platform_source,status FROM sdk_sessions ORDER BY id DESC LIMIT 5").all());
 '
-
-# 5. no dependency degradation
-curl -s http://127.0.0.1:37701/api/health | grep -o '"degraded":[a-z]*'
-# expected: "degraded":false
-
-# 6. no queue backlog
-tail -100 ~/.claude-mem/logs/claude-mem-$(date +%F).log | grep -iE "queueDepth|degraded|Claude executable"
 ```
 
 ---
 
-## 6. Known pitfalls
+## 7. Known pitfalls
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `/memory-status` says the worker is unreachable | Port resolution fell back to 37777 | Ensure settings.json is valid JSON and the port is numeric; or `export CLAUDE_MEM_PORT=37701`; or sync the master copy |
-| Connects but produces no memory | Missing AI dependency (claude CLI not installed / empty openrouter key) | Configure a provider and restart the worker |
-| Sessions stay `active`, never `completed` | Same as above — the AI generator cannot start, so summarize never runs | Same as above |
-| Logs spam `/api/sessions/complete` errors | That endpoint was removed in newer worker versions | The master copy degrades silently (FIX-2) |
-| Semantic search throws a chroma connection error | Chroma collection not ready | `curl "http://127.0.0.1:37701/api/chroma/status?deep=1"`; or disable `CLAUDE_MEM_CHROMA_ENABLED` |
-| Typing `pi` gives command not found | `~/.npm-global/bin` not on PATH | `export PATH="$HOME/.npm-global/bin:$PATH"` |
-| Plugin changes disappear | `pi install` overwrote node_modules | Re-sync with `./install.sh sync` from this directory |
+| `/memory-status` says worker unreachable | Port fell back to `37777` | Keep `~/.claude-mem/settings.json` valid JSON; or `export CLAUDE_MEM_PORT=37701` |
+| Connects but produces no memory | No AI provider configured | Configure an OpenAI-compatible endpoint or the claude CLI, then restart the worker |
+| Sessions stay `active`, never complete | Same — the summarizer cannot start | Same as above |
+| Logs spam `/api/sessions/complete` errors | That endpoint was removed in worker v12.4.4+ | This maintained fork already drops the call (FIX-2); ignore |
+| Semantic search throws a chroma error | Chroma collection not ready | Check `curl "http://127.0.0.1:37701/api/chroma/status?deep=1"`, or disable `CLAUDE_MEM_CHROMA_ENABLED` |
+| `pi` command not found | Global bin not on PATH | `export PATH="$HOME/.npm-global/bin:$PATH"` |
+| Edits to the extension seem ignored | pi wasn't restarted, or path is relative | Use an absolute path in `packages` and restart pi |
 
 ---
 
-## 7. Files and rollback
-
-| File | Location | Notes |
-|---|---|---|
-| Master copy | `agents/pi/pi-claude-mem.ts` (this repo) | Source of truth |
-| Patch | `agents/pi/pi-claude-mem.patch` | Convenient for review / cherry-pick |
-| Auto-backup | `~/.pi/agent/npm/node_modules/pi-agent-memory/extensions/pi-claude-mem.ts.bak-<timestamp>` | Created automatically before each sync |
-
-Roll back the plugin:
+## 8. Uninstall / rollback
 
 ```bash
-cd agent-memory-bridge/agents/pi && ./install.sh revert
+pi remove /path/to/agent-memory-bridge/agents/pi
 ```
+
+then restart pi. Because nothing is copied into `node_modules`, removing the
+`packages` entry fully detaches the extension; your data in `~/.claude-mem` is
+untouched.
 
 ---
 
-## 8. Required restarts after deployment
+## 9. Required restarts
 
-| Component | Restart method | Notes |
+| Component | Method | Notes |
 |---|---|---|
-| claude-mem worker | `curl -X POST http://127.0.0.1:37701/api/admin/restart` | Required after changing settings.json |
-| pi | quit and relaunch manually | Required after syncing the master copy to load the new extension |
+| claude-mem worker | `curl -X POST http://127.0.0.1:37701/api/admin/restart` | After changing `settings.json` |
+| pi | quit and relaunch | After installing/removing the package or editing the `.ts` |
 
-> A worker restart clears in-memory active-session objects and the pending queue — this is normal; already-persisted observations are unaffected.
+> A worker restart clears in-memory active-session state and the pending queue;
+> already-persisted observations are unaffected.
