@@ -1,49 +1,45 @@
-# pi-claude-mem
+# pi-agent-memory-bridge
 
-A self-maintained memory extension for
-[pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
-It is a thin client for the local **claude-mem worker** HTTP API: it records
-tool activity to the worker, injects relevant past context each turn, and
-registers a `memory_recall` search tool. pi itself does no summarization — the
-worker at `127.0.0.1:37701` handles summarization, embeddings and vector search.
+**持久记忆，随拿随用。** 一个为
+[pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
+打造的自我维护记忆扩展。自动记录你的每轮对话、工具调用与助手回复，跨会话、跨引擎调用同一份可搜索记忆。
 
-> **This is a fork, not an independent reimplementation.** It derives from the
-> ArtemisAI `pi-agent-memory@0.3.4` adapter, which itself derives from the
-> OpenClaw plugin shipped with claude-mem. See [NOTICE](./NOTICE) for the full
-> provenance and the list of modifications.
+> This is the **pi adapter** of the
+> [`agent-memory-bridge`](https://github.com/camplus360/agent-memory-bridge)
+> project — a bridge that gives every AI coding agent you use (OpenCode,
+> CodeBuddy, pi, Hermes) one shared memory.
 
-## License
+## ✨ Highlights
 
-**AGPL-3.0-or-later** — see [LICENSE](./LICENSE). The original copyright and
-notices must be retained. Note this is stricter than the rest of
-`agent-memory-bridge`, which is MIT; this `agents/pi/` subdirectory is a
-self-contained AGPL-licensed component.
+| 亮点 | 说明 |
+|:--|:--|
+| **🔄 多 Agent 适配** | 与 OpenCode / CodeBuddy / Hermes 共享同一记忆库，pi 里记的，其它 agent 也能搜到 |
+| **🚀 一键安装** | `pi install npm:pi-agent-memory-bridge` 一条命令，npm 市场直接装 |
+| **📥 自动捕获** | 自动记录用户提问、工具调用、助手回复、会话结束，零手动操作 |
+| **🔌 后端可拔插** | 底层可切换 claude-mem / mem0 / both，一个环境变量搞定 |
+| **🌐 中英双语** | 中英双语文档 |
 
-The claude-mem **worker backend is a separate program** (Apache-2.0) that this
-extension only talks to over a local HTTP API; it is neither contained in nor
-published by this package.
-
-## Install as a local-path package
-
-This package is `"private": true"` and is **not published to any npm registry**.
-pi loads the whole directory as a local-path package, so it is never overwritten
-by `pi update`.
+## Install (npm registry)
 
 ```bash
 # 1. make sure the worker is up
 curl -s http://127.0.0.1:37701/api/health
 
-# 2. install THIS directory as a local package (run from agents/pi, or pass an absolute path)
+# 2. install from the npm registry (recommended)
+pi install npm:pi-agent-memory-bridge
+
+#    or install from source (local path):
+cd /path/to/agent-memory-bridge/agents/pi
 pi install "$PWD"
 ```
 
-`pi install` appends the path to the `packages` array of
+`pi install` appends the package to the `packages` array of
 `~/.pi/agent/settings.json`:
 
 ```json
 {
   "packages": [
-    "/absolute/path/to/agent-memory-bridge/agents/pi"
+    "npm:pi-agent-memory-bridge"
   ]
 }
 ```
@@ -56,10 +52,12 @@ version and `degraded: false`.
 ### Uninstall
 
 ```bash
-pi remove /absolute/path/to/agent-memory-bridge/agents/pi
+pi remove npm:pi-agent-memory-bridge
 ```
 
 then restart pi.
+
+---
 
 ## How it works
 
@@ -81,6 +79,18 @@ pi-coding-agent
 
 Every observation is tagged `platformSource: "pi-agent"`.
 
+It is a thin client for the local **claude-mem worker** HTTP API: it records
+tool activity to the worker, injects relevant past context each turn, and
+registers a `memory_recall` search tool. pi itself does no summarization — the
+worker at `127.0.0.1:37701` handles summarization, embeddings and vector search.
+
+> **This is a fork, not an independent reimplementation.** It derives from the
+> ArtemisAI `pi-agent-memory@0.3.4` adapter, which itself derives from the
+> OpenClaw plugin shipped with claude-mem. See [NOTICE](./NOTICE) for the full
+> provenance and the list of modifications.
+
+---
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -99,20 +109,18 @@ The runtime only imports the two peer modules pi injects
 the directory needs no `node_modules`. The `@earendil-works` pi distribution
 exposes compatible extension APIs and loads the package as-is.
 
-## Modifying
+---
 
-Edit `extensions/pi-claude-mem.ts` in place and restart pi — there is no copy to
-sync (unlike an npm-package patch workflow). Verify with `/memory-status`.
+## License
 
-## Files
+**AGPL-3.0-or-later** — see [LICENSE](./LICENSE). The original copyright and
+notices must be retained. Note this is stricter than the rest of
+`agent-memory-bridge`, which is MIT; this `agents/pi/` subdirectory is a
+self-contained AGPL-licensed component.
 
-```text
-extensions/pi-claude-mem.ts   extension body (event hooks + memory_recall + /memory-status)
-skills/mem-search/SKILL.md    skill that guides the model to use memory_recall
-package.json                  private local-package manifest (pi.extensions / pi.skills)
-LICENSE                       AGPL-3.0 full text + copyright header
-NOTICE                        provenance and modification list
-```
+The claude-mem **worker backend is a separate program** (Apache-2.0) that this
+extension only talks to over a local HTTP API; it is neither contained in nor
+published by this package.
 
 For a from-scratch machine setup (installing pi, the worker and the AI provider)
 see [DEPLOY.md](./DEPLOY.md).

@@ -1,5 +1,5 @@
 {
-  "name": "pi-claude-mem",
+  "name": "pi-agent-memory-bridge",
   "version": "1.0.0",
   "description": "Self-maintained pi-coding-agent memory extension: a thin client for the local claude-mem worker HTTP API. Records tool activity, injects relevant past context, and registers a memory_recall search tool.",
   "keywords": [
@@ -27,10 +27,10 @@
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yeah365/agent-memory-bridge.git",
+    "url": "git+https://github.com/camplus360/agent-memory-bridge.git",
     "directory": "agents/pi"
   },
-  "private": true,
+  "private": false,
   "type": "module",
   "pi": {
     "extensions": [

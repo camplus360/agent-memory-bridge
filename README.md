@@ -1,6 +1,6 @@
 # agent-memory-bridge
 
-**One bridge that captures conversations from every AI coding agent you use and feeds them into a shared, searchable memory.**
+**One bridge. Every AI coding agent. One shared, searchable memory.**
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
@@ -8,19 +8,34 @@
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-red)](./agents/pi/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-**Mirrors —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/yeah365/agent-memory-bridge)
+**Mirrors —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/camplus360/agent-memory-bridge) · [npm](https://www.npmjs.com/package/pi-agent-memory-bridge)
 
-## Why
+---
 
-If you run several AI coding agents — OpenCode, CodeBuddy, pi, Hermes — each one invents its own memory capture: different hooks, different HTTP payloads, different corner cases. Maintaining four curl snippets means the protocol drifts, and one broken hook silently stops remembering anything.
+## ✨ Why you need this
 
-**agent-memory-bridge** collapses all of that into a **single source of truth**:
+Run several AI coding agents — **OpenCode, CodeBuddy, pi, Hermes** — and each one
+invents its own memory capture: different hooks, different payloads, different
+corner cases. Maintaining four separate hacks means the protocol drifts, and one
+broken hook silently stops remembering anything.
 
-- one unified script (`claude-mem-worker.py`) speaks the exact worker protocol;
-- every agent has a tiny adapter that only captures events and delegates to that script;
-- a failed capture **never blocks your agent** — hooks return instantly and degrade silently.
+**agent-memory-bridge** collapses all of that into **one source of truth** — a
+single, shared, searchable memory across every agent you use.
 
-The memory backend is [claude-mem](https://github.com/thedotmack/claude-mem) (a local worker that summarizes, embeds and semantically searches conversations). A [mem0](https://github.com/mem0ai/mem0) backend is also built in, and you can dual-write to both.
+---
+
+## 🎯 Highlights
+
+| 亮点 | 说明 |
+|:--|:--|
+| **🔄 多 Agent 适配** | OpenCode / CodeBuddy / pi / Hermes 一套协议全兼容，四端共享同一记忆库 |
+| **🚀 极致易用** | 一条命令安装，一条命令启用，`./install.sh --all` 搞定全部 |
+| **🌍 多平台适配** | macOS / Linux / Windows(WSL) 通用，bash + curl + python3 零额外依赖 |
+| **🔌 后端记忆库可拔插** | `claude-mem`（LLM 摘要 + 向量检索）/ `mem0`（服务端事实抽取）/ `both`（双写），一个环境变量切换 |
+| **📥 自动捕获** | 自动记录用户提问、工具调用、助手回复、会话结束，无需手动操作 |
+| **🌐 中英双语** | 完整英文 + 简体中文文档，README 双语同步 |
+
+---
 
 ## Features
 
@@ -29,7 +44,10 @@ The memory backend is [claude-mem](https://github.com/thedotmack/claude-mem) (a 
 - **Pluggable backends** — `claude-mem` (session-based, LLM summaries), `mem0` (flat, server-side fact extraction), or `both` (dual-write), switched with one environment variable.
 - **Hook-safe by design** — short timeouts, retries with backoff, and a silent `exit 0` when the worker is down. Your editor never hangs on a memory call.
 - **Correct JSON** — built with `jq` / `python3`, so quotes, backslashes and multiline tool output cannot corrupt a payload.
-- **Tested** — the OpenCode plugin ships with 8 mocked tests covering capture, dedupe, retries and search; `test-hooks.sh` runs every shell hook against a local mock worker.
+- **Tested** — the OpenCode plugin ships with 8 mocked tests; `test-hooks.sh` runs every shell hook against a local mock worker.
+- **Cross-platform** — pure bash + curl + python3, no compiled dependencies; runs on Linux, macOS and WSL.
+
+---
 
 ## Architecture
 
@@ -57,7 +75,9 @@ flowchart LR
     CM --> DB[("SQLite + Chroma")]
 ```
 
-All four agents share **one memory store**, so something you told OpenCode can be recalled from CodeBuddy.
+All four agents share **one memory store**, so something you told OpenCode can be recalled from CodeBuddy — or pi, or Hermes.
+
+---
 
 ## Quick start
 
@@ -73,7 +93,7 @@ All four agents share **one memory store**, so something you told OpenCode can b
 # Gitee (faster in mainland China)
 git clone https://gitee.com/camplus/agent-memory-bridge.git
 # or GitHub
-git clone https://github.com/yeah365/agent-memory-bridge.git
+git clone https://github.com/camplus360/agent-memory-bridge.git
 cd agent-memory-bridge
 ```
 
@@ -96,16 +116,20 @@ python3 ~/.local/share/claude-mem/claude-mem-worker.py health   # backend reacha
 
 Then follow the **one-time enable step** for your agent (register the plugin, merge hooks into `settings.json`, etc.) — see [docs/INSTALL.md](./docs/INSTALL.md).
 
+---
+
 ## Supported agents
 
 | Agent | Adapter | Integration style | Via unified script |
 |---|---|---|---|
 | **OpenCode** | [`agents/opencode`](./agents/opencode) | native plugin with unit tests; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
-| **pi** | [`agents/pi`](./agents/pi) | native TS extension loaded as a **local-path package**; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
+| **pi** | [`agents/pi`](./agents/pi) | native TS extension, installable **via npm** (`pi install npm:pi-agent-memory-bridge`) or local-path; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
 | **CodeBuddy** | [`agents/codebuddy`](./agents/codebuddy) | `hooks.json` command hooks, JSON on stdin | **yes** |
 | **Hermes** | [`agents/hermes`](./agents/hermes) | `engine.py` subprocess snippet | **yes** |
 
 Agents with a native HTTP client call the worker directly; agents that can only execute external commands go through the shell wrapper. Both produce the exact same protocol.
+
+---
 
 ## Choosing a memory backend
 
@@ -125,6 +149,8 @@ CLAUDE_MEM_BACKEND=both python3 claude-mem-worker.py search "keyword" 5
 `mem0-worker.py` is a thin wrapper equivalent to `CLAUDE_MEM_BACKEND=mem0`. mem0 variables: `MEM0_HOST` (localhost), `MEM0_PORT` (8000), `MEM0_API_KEY` (optional), `MEM0_USER_ID` ($USER), `MEM0_INFER` (true), or a full `MEM0_BASE_URL`.
 
 > **mem0 tenancy pitfall:** an API key is bound to a specific user view. Writes and searches must use the same view, or a stored memory will never show up in search.
+
+---
 
 ## Unified script reference
 
@@ -149,15 +175,19 @@ python3 claude-mem-worker.py hook        <agent>   # reads Claude Code/CodeBuddy
 
 Environment overrides: `CLAUDE_MEM_WORKER_HOST` (127.0.0.1), `CLAUDE_MEM_WORKER_PORT` (37701), `CLAUDE_MEM_HTTP_TIMEOUT` (8s), `CLAUDE_MEM_HTTP_RETRIES` (2), `CLAUDE_MEM_QUIET` (0).
 
+---
+
 ## Documentation
 
 - [docs/INSTALL.md](./docs/INSTALL.md) — full step-by-step install and per-agent enablement
 - [docs/CONFIG-REFERENCE.md](./docs/CONFIG-REFERENCE.md) — copy-ready config snapshots + pitfalls per agent
 - [docs/AGENT-RUNTIME-ARCH.md](./docs/AGENT-RUNTIME-ARCH.md) — the worker's two data paths (REST storage vs. Claude-CLI-based compression)
 - [docs/REGRESSION-TEST-STANDARD.md](./docs/REGRESSION-TEST-STANDARD.md) — acceptance baseline: hook events, recall and summaries
-- [agents/pi/DEPLOY.md](./agents/pi/DEPLOY.md) — deploying the pi local-path memory extension
+- [agents/pi/DEPLOY.md](./agents/pi/DEPLOY.md) — deploying the pi memory extension
 
 > Chinese originals of the four guides are kept under [`docs/zh/`](./docs/zh).
+
+---
 
 ## Roadmap
 
@@ -165,9 +195,13 @@ Environment overrides: `CLAUDE_MEM_WORKER_HOST` (127.0.0.1), `CLAUDE_MEM_WORKER_
 - a packaged release with checksums
 - end-to-end tests against an ephemeral worker container
 
+---
+
 ## Contributing
 
 Issues and PRs are welcome. A new agent adapter needs only two things: capture its lifecycle events (session start, user prompt, tool calls, assistant reply, session end) and map them to the unified script or the equivalent JSON payload. Please add a mock-based test or a `test-hooks.sh` case.
+
+---
 
 ## License
 
