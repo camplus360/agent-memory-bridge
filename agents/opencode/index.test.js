@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yeah <camplus360@163.com>
+
 // Mocked tests for the opencode-claude-mem capture plugin.
 // Run: bun test index.test.js   (or: node index.test.js)
 //

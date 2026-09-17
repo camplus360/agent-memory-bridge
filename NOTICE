@@ -1,0 +1,62 @@
+agent-memory-bridge
+Copyright (c) 2026 yeah <camplus360@163.com>
+
+This repository is an aggregate of independently licensed components.
+Unless stated otherwise in a subdirectory, the code is licensed under the
+MIT License (see LICENSE).
+
+Component license inventory
+---------------------------
+
+1. Root project and most adapters  —  MIT
+   The unified worker client (claude-mem-worker.py), the mem0 wrapper
+   (mem0-worker.py), the installer (install.sh), the hook test harness
+   (test-hooks.sh), and the CodeBuddy, Hermes and OpenCode adapters under
+   agents/ are original work released under the MIT License.
+
+2. agents/pi/  —  AGPL-3.0-or-later
+   This subdirectory is a maintained fork / derivative work. It incorporates
+   code and the structure of:
+     * claude-mem, Copyright (C) 2025 Alex Newman (@thedotmack),
+       https://github.com/thedotmack/claude-mem
+       (the OpenClaw plugin, authored while the project was AGPL-3.0)
+     * the pi-agent-memory adapter v0.3.4 by ArtemisAI,
+       https://github.com/ArtemisAI/pi-mem  (npm: pi-agent-memory),
+       distributed under AGPL-3.0
+   Modifications since the fork baseline, the full provenance chain and the
+   license text are documented in agents/pi/NOTICE and agents/pi/LICENSE.
+   Because the fork baseline and its upstream were AGPL at the time of
+   derivation, this component is kept under AGPL-3.0-or-later. The later
+   relicensing of current claude-mem to Apache-2.0 does not change the
+   obligations attached to the AGPL-era code this component derives from.
+
+3. agents/opencode/  —  MIT, independently written
+   The OpenCode adapter is an independent implementation written against the
+   public OpenCode plugin event names and the claude-mem worker's HTTP
+   protocol. It contains no source copied from the official claude-mem
+   OpenCode plugin; only uncopyrightable interface/protocol facts are shared.
+
+How the components relate (no license propagation by linking)
+-------------------------------------------------------------
+
+The MIT body and the AGPL agents/pi/ component communicate only by spawning
+separate processes and by local HTTP calls to an external worker. They are
+separate programs aggregated in one repository, not a combined derived work,
+so the AGPL does not propagate to the MIT-licensed adapters.
+
+External programs interoperated with (no third-party code bundled here)
+-----------------------------------------------------------------------
+
+  * claude-mem worker  — Apache-2.0, a separately installed and run program
+    that this project talks to over 127.0.0.1 HTTP. Not contained herein.
+  * mem0                — Apache-2.0, a separately installed and run program
+    reached over local HTTP. Not contained herein.
+  * @mariozechner/pi-coding-agent / @mariozechner/pi-ai — peer modules
+    provided at runtime by the pi agent; declared, never bundled.
+
+Trademarks
+----------
+
+"claude-mem", "mem0", "OpenCode", "CodeBuddy", "pi" and "Hermes" are names of
+their respective projects/owners. This software is an unofficial community
+bridge and is not endorsed by or affiliated with those projects.

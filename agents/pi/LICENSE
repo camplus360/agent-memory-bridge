@@ -2,7 +2,7 @@ pi-claude-mem — self-maintained pi-coding-agent memory extension
 
 Copyright (C) 2025 Alex Newman (@thedotmack) — original claude-mem / OpenClaw plugin.
 Copyright (C) 2025 ArtemisAI — the pi-agent adapter (pi-agent-memory@0.3.4).
-Copyright (C) 2026 camplus — modifications and this maintained fork (pi-claude-mem).
+Copyright (C) 2026 yeah (camplus) <camplus360@163.com> — modifications and this maintained fork (pi-claude-mem).
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published

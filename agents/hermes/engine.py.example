@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 yeah <camplus360@163.com>
 """
 Hermes -> claude-mem worker integration snippet (engine.py example).
 

@@ -1,6 +1,10 @@
-import { spawn } from "node:child_process";
-
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 yeah <camplus360@163.com>
+//
 // opencode-claude-mem: capture-only plugin for claude-mem.
+// Independent implementation written against the public OpenCode plugin
+// contract and the claude-mem worker HTTP protocol; no third-party source
+// is copied into this file (see ../../NOTICE).
 //
 // Responsibility (capture and send only; no summarization):
 //   - tool.execute.after      -> POST /api/sessions/observations (tool calls)
@@ -11,6 +15,8 @@ import { spawn } from "node:child_process";
 //
 // Summarization, embedding and vector search all happen in the claude-mem worker (127.0.0.1:37701).
 // Zero dependencies; pure Node/Bun built-in fetch.
+
+import { spawn } from "node:child_process";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 37701;

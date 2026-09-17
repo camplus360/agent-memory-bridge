@@ -4,9 +4,11 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Shell](https://img.shields.io/badge/shell-bash-green.svg)](#)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#贡献)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-red)](./agents/pi/LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+**仓库镜像 —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/yeah365/agent-memory-bridge)
 
 ## 为什么做这个
 
@@ -68,7 +70,10 @@ flowchart LR
   - **mem0**（可选）：8000 端口上的 mem0 服务。
 
 ```bash
-git clone https://github.com/<your-org>/agent-memory-bridge.git
+# Gitee（国内更快）
+git clone https://gitee.com/camplus/agent-memory-bridge.git
+# 或 GitHub
+git clone https://github.com/yeah365/agent-memory-bridge.git
 cd agent-memory-bridge
 ```
 
@@ -166,4 +171,9 @@ python3 claude-mem-worker.py hook        <agent>   # 从 stdin 读 Claude Code/C
 
 ## 开源协议
 
-[MIT](./LICENSE)
+本仓库为**多许可证**项目（完整组件清单见 [NOTICE](./NOTICE)）：
+
+- 统一 worker 客户端、安装器、测试，以及 CodeBuddy / Hermes / OpenCode 适配器为原创代码，采用 **MIT 许可证** —— [LICENSE](./LICENSE)；
+- [`agents/pi/`](./agents/pi) 适配器是衍生 fork，沿用 **GNU AGPL-3.0-or-later**（衍生自 AGPL 时期的 claude-mem / pi-agent-memory）—— 见 [agents/pi/LICENSE](./agents/pi/LICENSE) 与 [agents/pi/NOTICE](./agents/pi/NOTICE)。
+
+各组件之间仅通过子进程调用和本地 HTTP 通信，属于在同一仓库中聚合的独立程序，AGPL 组件不会传染 MIT 部分。claude-mem 和 mem0 worker 是外部的 Apache-2.0 程序，本项目只与其互操作，并未捆绑其代码。

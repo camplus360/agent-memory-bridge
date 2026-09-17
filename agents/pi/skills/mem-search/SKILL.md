@@ -3,6 +3,8 @@ name: mem-search
 description: Search claude-mem's persistent cross-session memory database. Use when user asks "did we already solve this?", "how did we do X last time?", or needs work from previous sessions.
 ---
 
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later. Derivative of claude-mem / pi-agent-memory; see agents/pi/LICENSE and agents/pi/NOTICE. -->
+
 # Memory Search (claude-mem)
 
 Search past work across pi-coding-agent sessions. The `memory_recall` tool is

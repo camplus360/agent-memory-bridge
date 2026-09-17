@@ -1,4 +1,9 @@
 /**
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ * Copyright (C) 2025 Alex Newman (@thedotmack) — original claude-mem / OpenClaw plugin.
+ * Copyright (C) 2025 ArtemisAI — the pi-agent adapter (pi-agent-memory@0.3.4).
+ * Copyright (C) 2026 yeah <camplus360@163.com> (camplus) — maintained fork.
+ *
  * pi-claude-mem — self-maintained claude-mem memory extension for pi-agents
  *
  * Gives pi-coding-agent (and other pi-mono runtimes) persistent cross-session

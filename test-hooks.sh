@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 yeah <camplus360@163.com>
+#
 # Hook trigger verifier
 # ============================================================================
 # Purpose: verify that each agent's hooks actually fire with correct fields.

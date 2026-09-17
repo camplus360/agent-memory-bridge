@@ -37,3 +37,11 @@ Restart opencode; on load it logs `[claude-mem] capture plugin loading`.
 **Double-capture pitfall:** remove the official shim `./plugins/claude-mem.js` from the `plugin` array — keep exactly one memory plugin.
 
 See [`../../docs/INSTALL.md`](../../docs/INSTALL.md) §3.1 for the copy-based alternative.
+
+## License
+
+[MIT](../../LICENSE). This is an **independent implementation** written against
+the public OpenCode plugin contract and the claude-mem worker HTTP protocol; it
+contains no source copied from the official claude-mem OpenCode plugin. It only
+interoperates, over local HTTP, with the separately installed Apache-2.0-licensed
+claude-mem worker (which is not bundled here). See the root [NOTICE](../../NOTICE).

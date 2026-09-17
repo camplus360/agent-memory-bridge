@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 yeah <camplus360@163.com>
+#
 # agent-memory-bridge installer
 # ============================================================================
 # Installs the unified worker script (single source of truth) and the

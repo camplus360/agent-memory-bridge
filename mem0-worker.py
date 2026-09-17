@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 #
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 yeah <camplus360@163.com>
+#
 # mem0 variant of the unified worker client (thin wrapper)
 # ============================================================================
 # Equivalent to: CLAUDE_MEM_BACKEND=mem0 python3 claude-mem-worker.py ...

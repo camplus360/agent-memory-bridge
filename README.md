@@ -4,9 +4,11 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Shell](https://img.shields.io/badge/shell-bash-green.svg)](#)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-red)](./agents/pi/LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+**Mirrors —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/yeah365/agent-memory-bridge)
 
 ## Why
 
@@ -68,7 +70,10 @@ All four agents share **one memory store**, so something you told OpenCode can b
   - **mem0** (optional): a mem0 server on port 8000.
 
 ```bash
-git clone https://github.com/<your-org>/agent-memory-bridge.git
+# Gitee (faster in mainland China)
+git clone https://gitee.com/camplus/agent-memory-bridge.git
+# or GitHub
+git clone https://github.com/yeah365/agent-memory-bridge.git
 cd agent-memory-bridge
 ```
 
@@ -166,4 +171,18 @@ Issues and PRs are welcome. A new agent adapter needs only two things: capture i
 
 ## License
 
-[MIT](./LICENSE)
+This is a **multi-licensed** repository (see [NOTICE](./NOTICE) for the full
+component inventory):
+
+- the unified worker client, installer, tests, and the CodeBuddy / Hermes /
+  OpenCode adapters are original work under the **MIT License** — [LICENSE](./LICENSE);
+- the [`agents/pi/`](./agents/pi) adapter is a derivative fork kept under
+  **GNU AGPL-3.0-or-later** (it derives from the AGPL-era claude-mem /
+  pi-agent-memory) — [agents/pi/LICENSE](./agents/pi/LICENSE) and
+  [agents/pi/NOTICE](./agents/pi/NOTICE).
+
+The components communicate only by spawning separate processes and over local
+HTTP; they are separate programs aggregated in one repository, so the AGPL
+component does not propagate to the MIT-licensed parts. The claude-mem and
+mem0 workers are external Apache-2.0 programs, merely interoperated with and
+not bundled in this repository.

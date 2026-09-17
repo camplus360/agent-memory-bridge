@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 #
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 yeah <camplus360@163.com>
+#
 # Unified claude-mem worker client (single source of truth)
 # ============================================================
 # Every "shell-callable" agent (CodeBuddy / Hermes / any hook-based agent

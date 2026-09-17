@@ -2,6 +2,13 @@
   "name": "opencode-claude-mem-capture",
   "version": "1.0.0",
   "description": "OpenCode capture-only plugin: sends conversation observations to the local claude-mem worker; summarization/embedding/search stay in claude-mem.",
+  "author": "yeah <camplus360@163.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yeah365/agent-memory-bridge.git",
+    "directory": "agents/opencode"
+  },
   "type": "module",
   "main": "index.js",
   "scripts": {

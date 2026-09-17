@@ -27,7 +27,7 @@
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR_ORG/agent-memory-bridge.git",
+    "url": "git+https://github.com/yeah365/agent-memory-bridge.git",
     "directory": "agents/pi"
   },
   "private": true,
