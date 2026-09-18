@@ -1,6 +1,6 @@
 {
-  "name": "opencode-claude-mem-capture",
-  "version": "1.0.0",
+  "name": "@camplus360/agent-memory-bridge-opencode",
+  "version": "1.0.2",
   "description": "OpenCode capture-only plugin: sends conversation observations to the local claude-mem worker; summarization/embedding/search stay in claude-mem.",
   "keywords": [
     "opencode",
@@ -19,6 +19,12 @@
   },
   "type": "module",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE",
+    "index.test.js"
+  ],
   "scripts": {
     "test": "bun run index.test.js"
   }

@@ -8,7 +8,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-red)](./agents/pi/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
-**Mirrors —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/camplus360/agent-memory-bridge) · [npm: agent-memory-bridge](https://www.npmjs.com/package/agent-memory-bridge) · [npm: opencode-claude-mem-capture](https://www.npmjs.com/package/opencode-claude-mem-capture) · [npm: dsh-agent-memory-bridge](https://www.npmjs.com/package/dsh-agent-memory-bridge)
+**Mirrors —** [Gitee](https://gitee.com/camplus/agent-memory-bridge) · [GitHub](https://github.com/camplus360/agent-memory-bridge) · [npm: agent-memory-bridge](https://www.npmjs.com/package/agent-memory-bridge) · [npm: @camplus360/agent-memory-bridge-opencode](https://www.npmjs.com/package/@camplus360/agent-memory-bridge-opencode) · [npm: @camplus360/agent-memory-bridge-dsh](https://www.npmjs.com/package/@camplus360/agent-memory-bridge-dsh)
 
 ---
 
@@ -41,7 +41,7 @@ single, shared, searchable memory across every agent you use.
 
 - **One repository, pick your agents** — install adapters for OpenCode, CodeBuddy, Codex CLI, pi, Hermes and/or dsh with a single `./install.sh --agent <name>`.
 - **One protocol, six adapters** — session id namespacing (`<agent>-<sessionId>`) prevents cross-agent collisions; payload fields are identical everywhere.
-- **npm-installable adapters** — pi (`npm:agent-memory-bridge`), opencode (`npm:opencode-claude-mem-capture`) and dsh (`npm:dsh-agent-memory-bridge`) ship as installable npm packages; one command to add, one to enable.
+- **npm-installable adapters** — pi (`npm:agent-memory-bridge`), opencode (`npm:@camplus360/agent-memory-bridge-opencode`) and dsh (`npm:@camplus360/agent-memory-bridge-dsh`) ship as installable npm packages; one command to add, one to enable.
 - **Pluggable backends** — `claude-mem` (session-based, LLM summaries), `mem0` (flat, server-side fact extraction), or `both` (dual-write), switched with one environment variable.
 - **Hook-safe by design** — short timeouts, retries with backoff, and a silent `exit 0` when the worker is down. Your editor never hangs on a memory call.
 - **Correct JSON** — built with `jq` / `python3`, so quotes, backslashes and multiline tool output cannot corrupt a payload.
@@ -128,9 +128,9 @@ Then follow the **one-time enable step** for your agent (register the plugin, me
 
 | Agent | Adapter | Integration style | Via unified script |
 |---|---|---|---|
-| **OpenCode** | [`agents/opencode`](./agents/opencode) | native plugin with unit tests; **npm-installable** (`opencode-claude-mem-capture`); spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
+| **OpenCode** | [`agents/opencode`](./agents/opencode) | native plugin with unit tests; **npm-installable** (`@camplus360/agent-memory-bridge-opencode`); spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
 | **pi** | [`agents/pi`](./agents/pi) | native TS extension, **npm-installable** (`pi install npm:agent-memory-bridge`) or local-path; spawns the unified `.py` shim by default | **yes** (default; `CLAUDE_MEM_TRANSPORT=http` bypasses) |
-| **dsh (DeepSeek Harness)** | [`agents/dsh`](./agents/dsh) | native Cordis plugin, **npm-installable** (`dsh plugin --profile <name> add dsh-agent-memory-bridge`); talks to the worker over HTTP | **no** (native HTTP client) |
+| **dsh (DeepSeek Harness)** | [`agents/dsh`](./agents/dsh) | native Cordis plugin, **npm-installable** (`dsh plugin --profile <name> add @camplus360/agent-memory-bridge-dsh`); talks to the worker over HTTP | **no** (native HTTP client) |
 | **CodeBuddy** | [`agents/codebuddy`](./agents/codebuddy) | `hooks.json` command hooks, JSON on stdin | **yes** |
 | **Codex CLI** | [`agents/codex`](./agents/codex) | `~/.codex/hooks.json` command hooks, JSON on stdin (trust once via `/hooks`) | **yes** |
 | **Hermes** | [`agents/hermes`](./agents/hermes) | `engine.py` subprocess snippet | **yes** |

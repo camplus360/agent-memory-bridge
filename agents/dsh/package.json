@@ -1,6 +1,6 @@
 {
-  "name": "dsh-agent-memory-bridge",
-  "version": "1.0.0",
+  "name": "@camplus360/agent-memory-bridge-dsh",
+  "version": "1.0.2",
   "description": "DeepSeek Harness memory adapter: captures conversation/tool observations to the local claude-mem worker over HTTP; summarization/embedding/search stay in claude-mem.",
   "keywords": [
     "deepseek-harness",
@@ -19,7 +19,8 @@
   },
   "files": [
     "index.js",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",

@@ -1,4 +1,4 @@
-# dsh-agent-memory-bridge
+# @camplus360/agent-memory-bridge-dsh
 
 A capture-only memory adapter for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
 It is the **dsh adapter** of the [agent-memory-bridge](../../../README.md) project and connects a running
@@ -58,7 +58,7 @@ curl -s http://127.0.0.1:37701/api/health   # "status":"ok"
 `dsh plugin` is a thin pnpm forwarder into the chosen profile. Add the package to a profile with:
 
 ```bash
-dsh plugin --profile <name> add dsh-agent-memory-bridge
+dsh plugin --profile <name> add @camplus360/agent-memory-bridge-dsh
 ```
 
 For local development you can install this directory directly (pnpm resolves a path/tarball/git spec to the
@@ -71,7 +71,7 @@ dsh plugin --profile <name> add /absolute/path/to/agent-memory-bridge/agents/dsh
 Then restart dsh with that profile; on load it logs:
 
 ```text
-[dsh-agent-memory-bridge] loaded → claude-mem worker at http://127.0.0.1:37701
+[@camplus360/agent-memory-bridge-dsh] loaded → claude-mem worker at http://127.0.0.1:37701
 ```
 
 The memory adapter is a plain Cordis plugin (not a profile *bundle* patch), so it is activated by the
