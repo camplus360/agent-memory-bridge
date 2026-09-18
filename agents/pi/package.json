@@ -1,17 +1,24 @@
 {
   "name": "agent-memory-bridge",
   "version": "1.0.2",
-  "description": "Self-maintained pi-coding-agent memory extension: a thin client for the local claude-mem worker HTTP API. Records tool activity, injects relevant past context, and registers a memory_recall search tool.",
+  "description": "Cross-session memory for pi-coding-agent (pi-mono). A thin client for the local claude-mem worker: records tool activity, injects relevant past context, and registers a memory_recall search tool. Share memory across pi, Claude Code, Cursor, Codex and OpenClaw.",
   "keywords": [
+    "agent-memory-bridge",
+    "memory-bridge",
     "pi-package",
     "pi-extension",
     "pi-skill",
-    "claude-mem",
     "pi-coding-agent",
+    "pi-mono",
+    "claude-mem",
     "memory",
     "persistent-memory",
     "cross-session",
-    "cross-engine"
+    "cross-engine",
+    "memory-recall",
+    "ai-agent",
+    "coding-agent",
+    "context-injection"
   ],
   "author": "camplus",
   "contributors": [
@@ -25,6 +32,7 @@
     }
   ],
   "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/camplus360/agent-memory-bridge#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/camplus360/agent-memory-bridge.git",

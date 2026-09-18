@@ -1,17 +1,24 @@
 {
   "name": "@camplus360/agent-memory-bridge-opencode",
   "version": "1.0.2",
-  "description": "OpenCode capture-only plugin: sends conversation observations to the local claude-mem worker; summarization/embedding/search stay in claude-mem.",
+  "description": "OpenCode plugin: captures conversation observations to the local claude-mem worker, giving OpenCode cross-session shared memory. Summarization/embedding/search stay in claude-mem.",
   "keywords": [
+    "agent-memory-bridge",
+    "memory-bridge",
     "opencode",
     "opencode-plugin",
     "claude-mem",
     "memory",
     "persistent-memory",
-    "cross-session"
+    "cross-session",
+    "cross-engine",
+    "memory-recall",
+    "ai-agent",
+    "coding-agent"
   ],
   "author": "camplus <camplus360@163.com>",
   "license": "MIT",
+  "homepage": "https://github.com/camplus360/agent-memory-bridge#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/camplus360/agent-memory-bridge.git",
