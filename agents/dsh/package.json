@@ -1,6 +1,6 @@
 {
   "name": "@camplus360/agent-memory-bridge-dsh",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DeepSeek Harness memory plugin: captures conversation/tool observations to the local claude-mem worker, giving DeepSeek Harness cross-session shared memory. Summarization/embedding/search stay in claude-mem.",
   "keywords": [
     "agent-memory-bridge",
