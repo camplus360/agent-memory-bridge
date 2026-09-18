@@ -99,6 +99,32 @@ else
 fi
 echo
 
+# ---------- 1b. Codex CLI hooks (real 0.142.4 stdin payload shape) ----------
+echo "[1b] Run Codex hook commands from agents/codex/hooks.json.example (real payload shape)"
+SCRIPT_DIR="$SCRIPT_DIR" WORKER_PY="$WORKER_PY" python3 - <<'PY'
+import json, os, subprocess
+sd = os.environ["SCRIPT_DIR"]; worker = os.environ["WORKER_PY"]
+tpl = open(os.path.join(sd, "agents", "codex", "hooks.json.example"), encoding="utf-8").read()
+tpl = tpl.replace("/ABS/PATH/agent-memory-bridge/claude-mem-worker.py", worker)
+hooks = json.loads(tpl)["hooks"]
+cwd = os.getcwd(); sid = "codex-hooktest-%d" % os.getpid()
+payloads = {
+  "SessionStart":    {"session_id": sid, "transcript_path": "/tmp/rollout.jsonl", "cwd": cwd, "hook_event_name": "SessionStart", "model": "gpt-5.5", "permission_mode": "bypassPermissions", "source": "startup"},
+  "UserPromptSubmit": {"session_id": sid, "turn_id": "t1", "transcript_path": "/tmp/rollout.jsonl", "cwd": cwd, "hook_event_name": "UserPromptSubmit", "model": "gpt-5.5", "permission_mode": "bypassPermissions", "prompt": "codex hook test prompt"},
+  "PostToolUse":     {"session_id": sid, "turn_id": "t1", "cwd": cwd, "hook_event_name": "PostToolUse", "tool_name": "shell", "tool_use_id": "u1", "tool_input": {"command": ["echo", "zqcodexprobe"]}, "tool_response": {"stdout": "zqcodexprobe\n", "exit_code": 0}},
+  "Stop":            {"session_id": sid, "turn_id": "t1", "cwd": cwd, "hook_event_name": "Stop", "last_assistant_message": "ran echo, got zqcodexprobe"},
+}
+for evt in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"):
+    cmd = hooks[evt][0]["hooks"][0]["command"]
+    p = subprocess.run(cmd, input=json.dumps(payloads[evt]), shell=True,
+                       capture_output=True, text=True, env=os.environ)
+    print(f"    -> fire {evt:16s} rc={p.returncode}")
+    if p.returncode != 0:
+        print("      stderr:", p.stderr[:200])
+print("    note: SessionStart is a no-op (no POST); the other three map to init/observation/summarize")
+PY
+echo
+
 # ---------- 2. Hermes injection points ----------
 echo "[2] Simulate the Hermes engine.py injection points"
 python3 "$WORKER_PY" init hermes "hermes-test-$$" "$(pwd)" "hermesproj" "hermes first message"

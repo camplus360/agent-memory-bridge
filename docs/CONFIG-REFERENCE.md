@@ -1,6 +1,6 @@
 # claude-mem Four-Agent Reusable Configuration Reference (verified)
 
-> This document captures the four-agent integration configuration **verified to work on a real machine**, plus the pitfalls surfaced during troubleshooting.
+> This document captures the five-agent integration configuration **verified to work on a real machine**, plus the pitfalls surfaced during troubleshooting.
 > It complements `INSTALL.md` (installation flow) and `AGENT-RUNTIME-ARCH.md` (worker internals);
 > this file is a **directly copyable configuration snapshot**. Check against it when deploying to a new machine.
 
@@ -89,7 +89,36 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 
 ---
 
-## 3. pi (native extension, local-path package)
+## 3. Codex CLI (hook mode — trust is the critical part)
+
+**Effective file:** standalone **`~/.codex/hooks.json`** (Codex reads it directly; do NOT put hooks in config.toml) + `[features] hooks = true` in `~/.codex/config.toml`. The installer merges both for you.
+
+```json
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }]
+  }
+}
+```
+`<ABS>` = the install root (default `/home/yourname/.local/share/claude-mem`). Prefer the absolute `/usr/bin/python3` so the hook resolves the interpreter under the hook sandbox.
+
+| Pitfall | Explanation |
+|---|---|
+| **Hook trust** | Non-managed hooks are skipped until reviewed. Trust once interactively via `/hooks` (persisted in `[hooks.state]`), or pass `--dangerously-bypass-hook-trust` for headless `codex exec` (no durable flag exists by design, upstream #21768) |
+| Effective location | standalone `~/.codex/hooks.json` (unlike CodeBuddy, NOT settings.json); config.toml only carries `[features] hooks=true` |
+| Strict JSON | `deny_unknown_fields` — a `_comment` key makes the file fail to load |
+| `hooks = "..."` error | `invalid type: string, expected struct HooksToml` means you set `hooks` to a path in config.toml; remove it and use hooks.json |
+| Event mapping | SessionStart accepted/no-op; UserPromptSubmit->init+prompt; PostToolUse->observation(tool); Stop->summarize (forwards last_assistant_message) |
+| Coexistence | Other hooks (e.g. `herdr-agent-state.sh`) keep running; the installer appends, never replaces |
+
+Verified end-to-end on Codex CLI 0.142.4: a bypass-trust `codex exec` produced `platform_source=codex` with one prompt + one observation + one summary.
+
+---
+
+## 4. pi (native extension, local-path package)
 
 **Effective:** the `packages` array of `~/.pi/agent/settings.json` contains the absolute path to this repo's `agents/pi` directory. The package's `pi.extensions` manifest points at `extensions/pi-claude-mem.ts`, which pi loads directly from the repo — no copy, no sync step.
 
@@ -119,7 +148,7 @@ legacy in-process fetch. See [`agents/pi/DEPLOY.md`](../agents/pi/DEPLOY.md).
 
 ---
 
-## 4. Hermes (gateway injection)
+## 5. Hermes (gateway injection)
 
 **Effective:** `_capture_claude_mem_turn` in `hermes-agent/gateway/run_turn.py` (not hermes-hudui/engine.py!).
 
@@ -145,7 +174,7 @@ if str(user_content or "").strip():        # init only when non-empty
 
 ---
 
-## 5. Quick acceptance checklist (four-agent full chain)
+## 6. Quick acceptance checklist (five-agent full chain)
 
 ```sql
 -- In ~/.claude-mem/claude-mem.db, check the latest triplet (epoch is milliseconds; divide by 1000)
@@ -153,7 +182,7 @@ SELECT 'user_prompt', max(datetime(created_at_epoch/1000,'unixepoch','+8 hours')
   FROM user_prompts WHERE content_session_id LIKE 'opencode-%'
 UNION ALL SELECT 'observation', max(datetime(created_at_epoch/1000,'unixepoch','+8 hours'))
   FROM observations WHERE project='opencode';
--- Same for codebuddy/pi/hermes; hermes/codebuddy observations often have project='unknown'
+-- Same for codebuddy/codex/pi/hermes; hermes/codebuddy/codex observations often have project='unknown'
 ```
 
 **General rules:**
@@ -163,12 +192,13 @@ UNION ALL SELECT 'observation', max(datetime(created_at_epoch/1000,'unixepoch','
 
 ---
 
-## 6. Verified results
+## 7. Verified results
 
 | Agent | Integration | user_prompt | observation | summary | Status |
 |---|---|---|---|---|---|
 | opencode | plugin | recorded | ✅ | ✅ | ✅ |
 | codebuddy | hook | recorded | ✅ | init passed | ✅ |
+| codex | hook | recorded | ✅ | ✅ | ✅ |
 | pi | extension | recorded | ✅ | — | ✅ |
 | hermes | gateway | recorded | ✅ | ✅ | ✅ |
 

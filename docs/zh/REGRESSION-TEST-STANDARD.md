@@ -1,8 +1,8 @@
 # claude-mem 回测验收标准（7 Hooks + 记忆召回 + 总结）
 
-> 本文件定义 claude-mem 四 agent 接入的**统一回测验收基线**。
+> 本文件定义 claude-mem 五 agent 接入的**统一回测验收基线**。
 > 任何机器/agent 部署或修复后，按下述标准回测，全部通过才算"可用"。
-> 适用于：本机 agent（opencode / CodeBuddy / Hermes）与 cc-connect 通道（pi），两通道同标准。
+> 适用于：本机 agent（opencode / CodeBuddy / Codex CLI / Hermes）与 cc-connect 通道（pi），两通道同标准。
 
 ---
 
@@ -45,6 +45,7 @@ Claude Code 系 hook 的生命周期事件共 7 个核心（另含 2 个扩展�
 |---|---|---|
 | **opencode** | 原生插件 | chat.message（用户）、tool.execute.after（工具）、experimental.text.complete / message.part.updated（assistant 流式）、message.updated（role）、session.idle / experimental.session.compacting（总结）、session.deleted（清理） |
 | **CodeBuddy** | hook（settings.json） | SessionStart / UserPromptSubmit / PostToolUse / Stop |
+| **Codex CLI** | hook（~/.codex/hooks.json，需信任） | SessionStart / UserPromptSubmit / PostToolUse / Stop（信任后触发；headless 用 --dangerously-bypass-hook-trust） |
 | **pi** | 原生扩展 | session_start → init、用户消息/工具/回复 → observation、会话结束 → summarize |
 | **Hermes** | gateway/run_turn.py | 回合结束异步捕获（init + observation + summarize） |
 
@@ -63,6 +64,10 @@ opencode run "请列出 /tmp 目录，然后回复：回测完成"
 echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"回测测试消息"}' | python3 claude-mem-worker.py hook codebuddy
 # 再补 Stop 触发总结：
 echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | python3 claude-mem-worker.py hook codebuddy
+
+# codex（同样的 hook 系；headless 需 --dangerously-bypass-hook-trust，交互 TUI 在 /hooks 信任一次）
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"回测测试消息"}' | python3 claude-mem-worker.py hook codex
+echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname","last_assistant_message":"回测完成"}' | python3 claude-mem-worker.py hook codex
 
 # pi
 pi -p "请只回复：回测测试"
@@ -132,6 +137,7 @@ sqlite3 "$DB" "SELECT count(*) FROM user_prompts WHERE prompt_text LIKE '%[media
 | worker 健康 | degraded=false, lastInteraction 非 null |
 | opencode | up/obs/summary 时间 + 通过✓ |
 | CodeBuddy | up/obs/summary 时间 + 通过✓ |
+| Codex CLI | up/obs/summary 时间 + 通过✓（信任后） |
 | pi (pi-claude-mem) | up/obs/summary 时间 + 通过✓ |
 | Hermes | up/obs/summary 时间 + 通过✓ |
 | 记忆召回 | 检索关键词 + 命中数 |
@@ -142,7 +148,7 @@ sqlite3 "$DB" "SELECT count(*) FROM user_prompts WHERE prompt_text LIKE '%[media
 
 ## 七、坑位速查（回测中易误判）
 
-1. **hook 系 agent（codebuddy/hermes）observation 落 `project='unknown'`** —— 按 project 名过滤会误判空白，应按 created_at 时间倒序查。
+1. **hook 系 agent（codebuddy/codex/hermes）observation 落 `project='unknown'`** —— 按 project 名过滤会误判空白，应按 created_at 时间倒序查。
 2. **memory_session_id 会变** —— summarize 时 worker 可能给会话换新 id，按 session_db_id 关联可能查不到，用最终 memory_session_id 或内容匹配。
 3. **单次 `opencode run` 偶发缺 summary** —— `session.idle` 事件触发不稳定（边缘情况），交互式/cc-connect 会话 summary 稳定；回测以真实使用场景为准。
 4. **worker 健康三查** —— `dependencies.degraded`（缺 claude CLI？）、`ai.lastInteraction`（null=LLM 没调过）、`ai.provider`（走哪条链路）。

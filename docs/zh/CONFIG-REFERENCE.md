@@ -1,6 +1,6 @@
-# claude-mem 四 Agent 可复用配置参考（实测版）
+# claude-mem 五 Agent 可复用配置参考（实测版）
 
-> 本文档记录**本机实测生效**的四 agent 接入配置 + 本次排障沉淀的避坑点。
+> 本文档记录**本机实测生效**的五 agent（opencode / CodeBuddy / Codex CLI / pi / Hermes）接入配置 + 本次排障沉淀的避坑点。
 > 与 `INSTALL.md`（安装流程）、`AGENT-RUNTIME-ARCH.md`（worker 原理）互补，
 > 本文是**可直接复制的配置快照**。新机器部署时按此核对。
 
@@ -88,7 +88,36 @@ curl -s http://127.0.0.1:37701/api/health | python3 -m json.tool
 
 ---
 
-## 三、pi（原生扩展，本地路径包）
+## 三、Codex CLI（hook 方式，⚠️ 信任最关键）
+
+**生效文件**：独立的 **`~/.codex/hooks.json`**（Codex 直接读取；**不要**放进 config.toml）+ `~/.codex/config.toml` 里的 `[features] hooks = true`。安装器会自动合并这两处。
+
+```json
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "/usr/bin/python3 <ABS>/claude-mem-worker.py hook codex", "timeout": 15000 }] }]
+  }
+}
+```
+`<ABS>` = 安装根（默认 `/home/yourname/.local/share/claude-mem`）。建议用绝对路径 `/usr/bin/python3`，确保 hook 沙箱下能解析解释器。
+
+| 坑 | 说明 |
+|---|---|
+| ⚠️ **hook 信任** | 非受管 hook 在审查前会被跳过。交互式在 `/hooks` 信任一次（持久化到 `[hooks.state]`）；headless `codex exec` 加 `--dangerously-bypass-hook-trust`（官方有意不提供持久开关，upstream #21768） |
+| 生效位置 | 独立 `~/.codex/hooks.json`（与 CodeBuddy 不同，**不是** settings.json）；config.toml 只放 `[features] hooks=true` |
+| 严格 JSON | `deny_unknown_fields`——放 `_comment` 键会导致整个文件加载失败 |
+| `hooks = "..."` 报错 | `invalid type: string, expected struct HooksToml` 表示你在 config.toml 把 hooks 写成了路径；删掉并改用 hooks.json |
+| 事件映射 | SessionStart 接收/no-op；UserPromptSubmit→init+prompt；PostToolUse→observation(工具)；Stop→summarize（透传 last_assistant_message） |
+| 共存 | 其他 hook（如 `herdr-agent-state.sh`）继续运行；安装器只追加、不覆盖 |
+
+已在 Codex CLI 0.142.4 上端到端实测：一次 bypass-trust 的 `codex exec` 产生 `platform_source=codex` 的一条 prompt + 一条 observation + 一条 summary。
+
+---
+
+## 四、pi（原生扩展，本地路径包）
 
 **生效**：`~/.pi/agent/settings.json` 的 `packages` 含本仓库 `agents/pi` 目录的绝对路径。包清单 `pi.extensions` 指向 `extensions/pi-claude-mem.ts`，pi 直接从仓库目录加载——不拷贝、无同步步骤。
 
@@ -118,7 +147,7 @@ pi > /memory-status
 
 ---
 
-## 四、Hermes（gateway 注入）
+## 五、Hermes（gateway 注入）
 
 **生效**：`hermes-agent/gateway/run_turn.py` 的 `_capture_claude_mem_turn`（不是 hermes-hudui/engine.py！）
 
@@ -144,7 +173,7 @@ if str(user_content or "").strip():        # 必须非空才 init
 
 ---
 
-## 五、快速验收清单（四 agent 全链路）
+## 六、快速验收清单（五 agent 全链路）
 
 ```sql
 -- 在 ~/.claude-mem/claude-mem.db 查最近三件套（epoch 是毫秒，/1000 换算）
@@ -152,7 +181,7 @@ SELECT 'user_prompt', max(datetime(created_at_epoch/1000,'unixepoch','+8 hours')
   FROM user_prompts WHERE content_session_id LIKE 'opencode-%'
 UNION ALL SELECT 'observation', max(datetime(created_at_epoch/1000,'unixepoch','+8 hours'))
   FROM observations WHERE project='opencode';
--- 对 codebuddy/pi/hermes 同理；hermes/codebuddy 的 observation project 多为 'unknown'
+-- 对 codebuddy/codex/pi/hermes 同理；hermes/codebuddy/codex 的 observation project 多为 'unknown'
 ```
 
 **通则**：
@@ -162,13 +191,14 @@ UNION ALL SELECT 'observation', max(datetime(created_at_epoch/1000,'unixepoch','
 
 ---
 
-## 六、本次实测结论（2026-09-09）
+## 七、本次实测结论
 
 | Agent | 接入 | user_prompt | observation | summary | 状态 |
 |---|---|---|---|---|---|
-| opencode | 插件 | 09:20 | 09:21 ✅ | 09:21 ✅ | ✅ |
-| codebuddy | hook | 09:52(实测) | 09:53 ✅ | init已通 | ✅ |
-| pi | 扩展 | 09:13 | 09:37 ✅ | — | ✅ |
-| hermes | gateway | 09:48 | 09:53 ✅ | 09:48 ✅ | ✅ |
+| opencode | 插件 | recorded | ✅ | ✅ | ✅ |
+| codebuddy | hook | recorded | ✅ | ✅ | ✅ |
+| codex (0.142.4) | hook | recorded | ✅ | ✅ | ✅ |
+| pi | 扩展 | recorded | ✅ | — | ✅ |
+| hermes | gateway | recorded | ✅ | ✅ | ✅ |
 
-修复后 `[media prompt]` 增量 = **0**。两处修复：① run_turn.py 空 init ② worker CLAUDE_CODE_PATH。
+修复后 `[media prompt]` 增量 = **0**。历史两处修复：① run_turn.py 空 init ② worker CLAUDE_CODE_PATH。

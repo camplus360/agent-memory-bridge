@@ -1,8 +1,8 @@
 # claude-mem Regression Acceptance Standard (7 Hooks + Memory Recall + Summarization)
 
-> This file defines the **unified regression acceptance baseline** for the four-agent claude-mem integration.
+> This file defines the **unified regression acceptance baseline** for the five-agent claude-mem integration.
 > After deploying or fixing any machine/agent, run the regression per this standard; it is "usable" only when everything passes.
-> Applies to: local agents (opencode / CodeBuddy / Hermes) and the cc-connect channel (pi) — both channels share the same standard.
+> Applies to: local agents (opencode / CodeBuddy / Codex CLI / Hermes) and the cc-connect channel (pi) — both channels share the same standard.
 
 ---
 
@@ -45,6 +45,7 @@ Claude-Code-style hooks have 7 core lifecycle events (plus 2 optional extensions
 |---|---|---|
 | **opencode** | native plugin | chat.message (user), tool.execute.after (tool), experimental.text.complete / message.part.updated (assistant streaming), message.updated (role), session.idle / experimental.session.compacting (summary), session.deleted (cleanup) |
 | **CodeBuddy** | hook (settings.json) | SessionStart / UserPromptSubmit / PostToolUse / Stop |
+| **Codex CLI** | hook (~/.codex/hooks.json, trust required) | SessionStart / UserPromptSubmit / PostToolUse / Stop (fires after trust; headless via --dangerously-bypass-hook-trust) |
 | **pi** | native extension | session_start -> init, user messages/tools/replies -> observation, session end -> summarize |
 | **Hermes** | gateway/run_turn.py | asynchronous capture after a turn ends (init + observation + summarize) |
 
@@ -63,6 +64,10 @@ opencode run "list the /tmp directory, then reply: regression done"
 echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"regression test message"}' | python3 claude-mem-worker.py hook codebuddy
 # then send Stop to trigger summarization:
 echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname"}' | python3 claude-mem-worker.py hook codebuddy
+
+# codex (same hook family; headless needs --dangerously-bypass-hook-trust, or trust once via /hooks in the TUI)
+echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-<ts>","cwd":"/home/yourname","prompt":"regression test message"}' | python3 claude-mem-worker.py hook codex
+echo '{"hook_event_name":"Stop","session_id":"test-<ts>","cwd":"/home/yourname","last_assistant_message":"regression done"}' | python3 claude-mem-worker.py hook codex
 
 # pi
 pi -p "reply with only: regression test"
@@ -132,6 +137,7 @@ sqlite3 "$DB" "SELECT count(*) FROM user_prompts WHERE prompt_text LIKE '%[media
 | Worker health | degraded=false, lastInteraction non-null |
 | opencode | up/obs/summary timestamps + pass |
 | CodeBuddy | up/obs/summary timestamps + pass |
+| Codex CLI | up/obs/summary timestamps + pass (after trust) |
 | pi (pi-claude-mem) | up/obs/summary timestamps + pass |
 | Hermes | up/obs/summary timestamps + pass |
 | Memory recall | search keyword + hit count |
@@ -142,7 +148,7 @@ sqlite3 "$DB" "SELECT count(*) FROM user_prompts WHERE prompt_text LIKE '%[media
 
 ## 7. Pitfall cheat sheet (easy misjudgments during regression)
 
-1. **Hook-style agents (codebuddy/hermes) land observations under `project='unknown'`** — filtering by project name looks like an empty result; query by created_at descending instead.
+1. **Hook-style agents (codebuddy/codex/hermes) land observations under `project='unknown'`** — filtering by project name looks like an empty result; query by created_at descending instead.
 2. **memory_session_id can change** — during summarize the worker may assign the session a new id, so joining on session_db_id may miss rows; use the final memory_session_id or content matching.
 3. **A single `opencode run` occasionally lacks a summary** — the `session.idle` event fires inconsistently in that edge case; interactive/cc-connect sessions summarize reliably. Judge against real usage scenarios.
 4. **Three worker health checks** — `dependencies.degraded` (missing claude CLI?), `ai.lastInteraction` (null = LLM never called), `ai.provider` (which pipeline).

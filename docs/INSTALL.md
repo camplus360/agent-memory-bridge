@@ -1,6 +1,6 @@
 # Installation Guide (detailed)
 
-> Goal: automatically capture conversation memory from **OpenCode / CodeBuddy / pi / Hermes**
+> Goal: automatically capture conversation memory from **OpenCode / CodeBuddy / Codex CLI / pi / Hermes**
 > and write it into one local claude-mem worker (`127.0.0.1:37701`).
 > All agents go through the unified `claude-mem-worker.py` in this repository
 > (OpenCode/pi ship native reference implementations with identical fields).
@@ -11,14 +11,15 @@
 
 ```
   opencode  ─┐
-  CodeBuddy ─┼─► claude-mem-worker.py (single source of truth) ─► claude-mem worker :37701 ─► SQLite + Chroma
+  CodeBuddy ─┤
+  Codex CLI ─┼─► claude-mem-worker.py (single source of truth) ─► claude-mem worker :37701 ─► SQLite + Chroma
   pi        ─┤      (init/observation/summarize)                     (summary/embedding/search)
   Hermes    ─┘
 ```
 
-- The worker handles LLM summarization, embeddings, vector search and dedupe. **All four agents share one memory store.**
+- The worker handles LLM summarization, embeddings, vector search and dedupe. **All five agents share one memory store.**
 - Each agent only captures its conversation and calls the worker; no memory logic is duplicated.
-- Session isolation: every agent is prefixed (`opencode-` / `codebuddy-` / `pi-` / `hermes-`), so identical sessionIds never collide.
+- Session isolation: every agent is prefixed (`opencode-` / `codebuddy-` / `codex-` / `pi-` / `hermes-`), so identical sessionIds never collide.
 
 ---
 
@@ -100,10 +101,11 @@ systemctl --user enable --now claude-mem-worker
 
 ```bash
 cd agent-memory-bridge
-./install.sh --all        # all 4 agents
+./install.sh --all        # all 5 agents
 # or pick:
 ./install.sh --agent opencode
 ./install.sh --agent codebuddy
+./install.sh --agent codex
 ./install.sh --agent hermes
 # debugging:
 ./install.sh --dry-run                  # print actions only
@@ -120,6 +122,7 @@ cd agent-memory-bridge
 | **opencode** | `~/.config/opencode/plugins/claude-mem-capture/` | yes — register the plugin in `opencode.json` (§3.1) |
 | **pi** | install root `agents/pi/` (reference impl + DEPLOY.md) | yes — deploy into the npm package per DEPLOY.md (§3.3) |
 | **codebuddy** | `~/.codebuddy/hooks.claude-mem.json` | yes — merge into `settings.json` (§3.2) |
+| **codex** | `~/.codex/hooks.json` (merged, existing hooks kept) + `[features] hooks=true` | yes — trust once via `/hooks`, or `--dangerously-bypass-hook-trust` headless (§3.5) |
 | **Hermes** | install root `agents/hermes/engine.py.example` | yes — paste into engine.py event points (§3.4) |
 
 > Overrides: `CLAUDE_MEM_WORKER_HOST` / `CLAUDE_MEM_WORKER_PORT` / `CLAUDE_MEM_INSTALL_ROOT`
@@ -244,6 +247,30 @@ Set the script's absolute path via the `CLAUDE_MEM_WORKER_PY` env var or the con
 
 ---
 
+### 3.5 Codex CLI (hooks calling the worker script)
+
+Requires Codex CLI **≥ 0.131** (verified on 0.142.4). `install.sh --agent codex`:
+
+1. idempotently **merges** the four worker hooks into `~/.codex/hooks.json`, preserving any hooks already there (for example the `herdr-agent-state.sh` `SessionStart` hook — both run);
+2. renders the absolute worker path (`/usr/bin/python3 <install-root>/claude-mem-worker.py hook codex`);
+3. enables `[features] hooks = true` in `~/.codex/config.toml` (idempotent);
+4. backs up the previous `hooks.json` to `hooks.json.bak-claude-mem-<ts>` on first change.
+
+Unlike CodeBuddy, Codex reads the standalone `~/.codex/hooks.json` directly (do **not** put it in `config.toml`), and the file is strict JSON (`deny_unknown_fields` — no `_comment` key).
+
+**Hook trust — the one required manual step.** Non-managed command hooks must be reviewed before they run:
+
+- **Interactive (persistent):** start `codex`, open `/hooks`, review and trust the four entries once. Trust is stored against the hook hash in `[hooks.state]` of `config.toml` and only needs re-doing if the hook command changes.
+- **Headless (`codex exec`):** add `--dangerously-bypass-hook-trust` per invocation. There is intentionally no durable config flag (upstream PR openai/codex#21768).
+
+```bash
+codex exec --skip-git-repo-check --dangerously-bypass-hook-trust "your task"
+```
+
+The hook runs with normal user privileges and reaches `127.0.0.1:37701`; a verified run produced one prompt + one observation + one summary tagged `platformSource=codex`.
+
+---
+
 ## 4. Unified script reference (for any shell-based agent)
 
 ```bash
@@ -255,7 +282,7 @@ python3 claude-mem-worker.py search      <query> [limit]
 python3 claude-mem-worker.py health
 ```
 
-`<agent>` identifies the source (`codebuddy` / `hermes` / ...) and is prepended to form `${agent}-${sessionId}`.
+`<agent>` identifies the source (`codebuddy` / `codex` / `hermes` / ...) and is prepended to form `${agent}-${sessionId}`.
 
 **Environment variables:** `CLAUDE_MEM_WORKER_HOST` (127.0.0.1) / `CLAUDE_MEM_WORKER_PORT` (37701) /
 `CLAUDE_MEM_HTTP_TIMEOUT` (8s) / `CLAUDE_MEM_HTTP_RETRIES` (2) / `CLAUDE_MEM_QUIET` (0).
@@ -270,7 +297,7 @@ When the worker is unreachable the script **silently exits 0**; it never blocks 
 
 ```bash
 W="python3 ~/.local/share/claude-mem/claude-mem-worker.py"
-for a in opencode codebuddy pi hermes; do
+for a in opencode codebuddy codex pi hermes; do
   $W init $a s1 /tmp
   $W observation $a s1 "test text $a" /tmp assistant_message $a
   $W summarize $a s1 "" $a
@@ -284,6 +311,7 @@ curl -s http://127.0.0.1:37701/api/stats
 
 - **opencode**: start a session, chat a little; after idle a "Memory saved" toast appears; `curl :37701/api/stats` shows observations+.
 - **CodeBuddy**: one normal turn; stats should show an observation for that session.
+- **Codex CLI**: after trusting in `/hooks` (or with `--dangerously-bypass-hook-trust`), run one turn; a new row with `platform_source=codex` and a prompt/observation/summary appears.
 - **pi**: `/memory-status` shows connected; check summaries grow after chatting.
 - **Hermes**: after a turn, check worker stats.
 
@@ -303,6 +331,8 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=your-keyword&limit
 | reachable but no memories | AI provider not configured | set `CLAUDE_MEM_OPENROUTER_API_KEY` etc., restart the worker |
 | opencode double writes | official shim and this plugin coexist | keep one entry in the `plugin` array |
 | CodeBuddy double writes | MCP version + hook version coexist | keep the hook version only |
+| Codex hooks never fire | hooks not trusted (headless `codex exec` skips untrusted hooks) | trust once in `/hooks`, or pass `--dangerously-bypass-hook-trust` |
+| Codex `invalid type … expected struct HooksToml` | `hooks` in config.toml set to a path string | put hooks in `~/.codex/hooks.json`; `config.toml` only needs `[features] hooks=true` |
 | pi fails connecting to 37777 | invalid settings.json / string port | valid JSON + numeric port 37701 |
 | `pi` command not found | `~/.npm-global/bin` not in PATH | `export PATH="$HOME/.npm-global/bin:$PATH"` |
 | hook command errors | placeholder path not replaced / wrong var names | check the path in `hooks.claude-mem.json`; adapt to CodeBuddy's actual variables |
@@ -317,6 +347,7 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=your-keyword&limit
 
 # opencode: remove the plugin dir from the plugin array in opencode.json
 # CodeBuddy: remove the matching command from settings.json hooks
+# Codex:      remove the four worker commands from ~/.codex/hooks.json (herdr hooks are left untouched)
 # pi:        pi remove /abs/path/agent-memory-bridge/agents/pi
 # Hermes:    remove the injected function calls from engine.py
 ```

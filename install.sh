@@ -11,7 +11,7 @@
 #
 # Usage:
 #   ./install.sh                  # interactively choose agents
-#   ./install.sh --all            # install all (opencode/pi/codebuddy/hermes)
+#   ./install.sh --all            # install all (opencode/pi/codebuddy/codex/hermes)
 #   ./install.sh --agent opencode # install one agent
 #   ./install.sh --prefix /opt/claude-mem   # custom install root
 #   ./install.sh --dry-run        # print actions without writing
@@ -30,7 +30,7 @@ TARGET_AGENTS=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --all) TARGET_AGENTS=(opencode pi codebuddy hermes) ;;
+    --all) TARGET_AGENTS=(opencode pi codebuddy codex hermes) ;;
     --agent) TARGET_AGENTS+=("$2"); shift ;;
     --prefix) INSTALL_ROOT="$2"; shift ;;
     --dry-run) DRY_RUN=1 ;;
@@ -42,7 +42,7 @@ done
 
 if [ ${#TARGET_AGENTS[@]} -eq 0 ]; then
   echo "Select agents to install (space-separated numbers, Enter = all):"
-  echo "  1) opencode   2) pi   3) codebuddy   4) hermes"
+  echo "  1) opencode   2) pi   3) codebuddy   4) codex   5) hermes"
   read -r sel
   case "$sel" in
     *1*) TARGET_AGENTS+=(opencode) ;;
@@ -54,9 +54,12 @@ if [ ${#TARGET_AGENTS[@]} -eq 0 ]; then
     *3*) TARGET_AGENTS+=(codebuddy) ;;
   esac
   case "$sel" in
-    *4*) TARGET_AGENTS+=(hermes) ;;
+    *4*) TARGET_AGENTS+=(codex) ;;
   esac
-  [ ${#TARGET_AGENTS[@]} -eq 0 ] && TARGET_AGENTS=(opencode pi codebuddy hermes)
+  case "$sel" in
+    *5*) TARGET_AGENTS+=(hermes) ;;
+  esac
+  [ ${#TARGET_AGENTS[@]} -eq 0 ] && TARGET_AGENTS=(opencode pi codebuddy codex hermes)
 fi
 
 run() {
@@ -162,6 +165,77 @@ for ag in "${TARGET_AGENTS[@]}"; do
       # Render hooks.json.example to hooks.claude-mem.json (never overwrite hooks.json)
       run "sed 's#/ABS/PATH/agent-memory-bridge/claude-mem-worker.py#$INSTALL_ROOT/claude-mem-worker.py#g' '$SCRIPT_DIR/agents/codebuddy/hooks.json.example' > '$DST/hooks.claude-mem.json'"
       echo "[ok] codebuddy hooks -> $DST/hooks.claude-mem.json (merge into settings.json to enable)"
+      ;;
+    codex)
+      DST="$HOME/.codex"
+      CODEX_HOOKS="$DST/hooks.json"
+      CODEX_CFG="$DST/config.toml"
+      if [ "$DRY_RUN" = "1" ]; then
+        echo "[dry-run] ensure [features] hooks=true in $CODEX_CFG"
+        echo "[dry-run] merge codex worker hooks into $CODEX_HOOKS (existing hooks preserved)"
+      else
+        run "mkdir -p '$DST'"
+        TEMPLATE="$SCRIPT_DIR/agents/codex/hooks.json.example" \
+        WORKER_ABS="$INSTALL_ROOT/claude-mem-worker.py" \
+        HOOKS_OUT="$CODEX_HOOKS" CFG_OUT="$CODEX_CFG" \
+        python3 - <<'PY'
+import json, os, re, time
+tpl = os.environ["TEMPLATE"]; worker = os.environ["WORKER_ABS"]
+hooks_path = os.environ["HOOKS_OUT"]; cfg_path = os.environ["CFG_OUT"]
+MARKER = "claude-mem-worker.py"
+
+# 1) render the template's absolute worker path, then parse it
+raw = open(tpl, encoding="utf-8").read()
+raw = raw.replace("/ABS/PATH/agent-memory-bridge/claude-mem-worker.py", worker)
+tpl_hooks = json.loads(raw)["hooks"]
+
+# 2) load existing hooks.json (codex merges ALL sources; never drop existing hooks)
+if os.path.exists(hooks_path):
+    try:
+        cur = json.load(open(hooks_path, encoding="utf-8"))
+    except Exception as e:
+        raise SystemExit(f"existing {hooks_path} is not valid JSON: {e}")
+else:
+    cur = {}
+cur.setdefault("hooks", {})
+
+def is_ours(handler):
+    c = (handler.get("command") or "")
+    return MARKER in c and "hook codex" in c
+
+action = "unchanged"
+for event, groups in tpl_hooks.items():
+    existing = cur["hooks"].setdefault(event, [])
+    already = any(is_ours(h) for g in existing for h in g.get("hooks", []))
+    if already:
+        continue  # idempotent: do not duplicate our hook on re-install
+    existing.extend(groups)
+    action = "merged"
+
+if action == "merged":
+    if os.path.exists(hooks_path):
+        bak = f"{hooks_path}.bak-claude-mem-{time.strftime('%Y%m%d-%H%M%S')}"
+        open(bak, "w", encoding="utf-8").write(open(hooks_path, encoding="utf-8").read())
+    with open(hooks_path, "w", encoding="utf-8") as f:
+        json.dump(cur, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+# 3) idempotently enable [features] hooks = true in config.toml
+cfg = open(cfg_path, encoding="utf-8").read() if os.path.exists(cfg_path) else ""
+m = re.search(r"(?m)^\[features\]\s*$", cfg)
+if re.search(r"(?m)^hooks\s*=\s*true\s*$", cfg[m.start():] if m else ""):
+    pass  # already enabled inside [features]
+elif m:
+    # insert right after the [features] header (before its next table/EOF)
+    cfg = cfg[:m.end()] + "\nhooks = true" + cfg[m.end():]
+    open(cfg_path, "w", encoding="utf-8").write(cfg)
+else:
+    sep = "" if cfg.endswith("\n") or cfg == "" else "\n"
+    open(cfg_path, "a", encoding="utf-8").write(f"{sep}\n[features]\nhooks = true\n")
+print(f"codex hooks {action} -> {hooks_path}")
+PY
+        echo "[ok] codex hooks -> $CODEX_HOOKS (existing hooks e.g. herdr preserved; trust via /hooks or --dangerously-bypass-hook-trust)"
+      fi
       ;;
     hermes)
       DST="$INSTALL_ROOT/agents/hermes"

@@ -1,6 +1,6 @@
 # claude-mem 统一接入安装指南（详细版）
 
-> 目标：把 **opencode / CodeBuddy / pi / Hermes** 四个 agent 的对话记忆，全部自动捕获并写入同一个
+> 目标：把 **opencode / CodeBuddy / Codex CLI / pi / Hermes** 五个 agent 的对话记忆，全部自动捕获并写入同一个
 > 本机 claude-mem worker（`127.0.0.1:37701`）。
 > 所有 agent 统一通过本目录的 `claude-mem-worker.py` 对接 worker（opencode/pi 为原生参考实现，字段一致）。
 
@@ -10,14 +10,15 @@
 
 ```
   opencode ─┐
-  CodeBuddy ─┼─► claude-mem-worker.py（单一真相源）─► claude-mem worker :37701 ─► SQLite + Chroma
+  CodeBuddy ─┤
+  Codex CLI ─┼─► claude-mem-worker.py（单一真相源）─► claude-mem worker :37701 ─► SQLite + Chroma
   pi ───────┤      （init/observation/summarize）      （总结/embedding/检索）
   Hermes ───┘
 ```
 
-- worker 负责：LLM 总结、embedding、向量检索、去重合并。**四个 agent 共享同一记忆库**。
+- worker 负责：LLM 总结、embedding、向量检索、去重合并。**五个 agent 共享同一记忆库**。
 - 每个 agent 只负责「捕获对话 → 调 worker」，不重复实现记忆逻辑。
-- 会话隔离：每个 agent 用前缀区分（`opencode-` / `codebuddy-` / `pi-` / `hermes-`），同名 sessionId 不会混写。
+- 会话隔离：每个 agent 用前缀区分（`opencode-` / `codebuddy-` / `codex-` / `pi-` / `hermes-`），同名 sessionId 不会混写。
 
 ---
 
@@ -97,10 +98,11 @@ systemctl --user enable --now claude-mem-worker
 
 ```bash
 cd agent-memory-bridge
-./install.sh --all        # 安装全部 4 个 agent
+./install.sh --all        # 安装全部 5 个 agent
 # 或选择性安装：
 ./install.sh --agent opencode
 ./install.sh --agent codebuddy
+./install.sh --agent codex
 ./install.sh --agent hermes
 # 调试用：
 ./install.sh --dry-run              # 只打印要做什么
@@ -117,6 +119,7 @@ cd agent-memory-bridge
 | **opencode** | `~/.config/opencode/plugins/claude-mem-capture/` | 是，在 `opencode.json` 注册插件（见 §三.1） |
 | **pi** | 安装根 `agents/pi/`（参考实现 + DEPLOY.md） | 是，按 DEPLOY.md 部署到 npm 包（见 §三.3） |
 | **codebuddy** | `~/.codebuddy/hooks.claude-mem.json` | 是，并入 `hooks.json`（见 §三.2） |
+| **codex** | `~/.codex/hooks.json`（合并，保留已有 hook）+ `[features] hooks=true` | 是，在 `/hooks` 信任一次，或 headless 用 `--dangerously-bypass-hook-trust`（见 §三.5） |
 | **Hermes** | 安装根 `agents/hermes/engine.py.example` | 是，粘进 engine.py 事件点（见 §三.4） |
 
 > 覆盖环境变量：`CLAUDE_MEM_WORKER_HOST` / `CLAUDE_MEM_WORKER_PORT` / `CLAUDE_MEM_INSTALL_ROOT`
@@ -189,6 +192,32 @@ bun test index.test.js        # 或 npm test
 
 ---
 
+### 3.5 Codex CLI（hooks 调 worker 脚本）
+
+要求 Codex CLI **≥ 0.131**（在 0.142.4 上实测）。`install.sh --agent codex` 会：
+
+1. 幂等**合并**四个 worker hook 到 `~/.codex/hooks.json`，保留已有 hook（例如 `herdr-agent-state.sh` 的 SessionStart hook —— 两者会同时运行）；
+2. 渲染 worker 绝对路径（`/usr/bin/python3 <安装根>/claude-mem-worker.py hook codex`）；
+3. 在 `~/.codex/config.toml` 幂等启用 `[features] hooks = true`；
+4. 首次改动前把旧 `hooks.json` 备份为 `hooks.json.bak-claude-mem-<时间戳>`。
+
+与 CodeBuddy 不同，Codex **直接读取独立的 `~/.codex/hooks.json`**（不要放进 config.toml），且该文件是严格 JSON（`deny_unknown_fields`，不能有 `_comment` 键）。
+
+**hook 信任 —— 唯一需要的手动步骤。** 非受管 command hook 必须先审查才能运行：
+
+- **交互式（持久）**：启动 `codex`，打开 `/hooks`，审查并信任这四个条目一次。信任以 hook 哈希存入 config.toml 的 `[hooks.state]`，仅当 hook 命令变更时才需重新信任。
+- **无头（`codex exec`）**：每次调用加 `--dangerously-bypass-hook-trust`。官方有意不提供持久配置项（upstream PR openai/codex#21768）。
+
+```bash
+codex exec --skip-git-repo-check --dangerously-bypass-hook-trust "你的任务"
+```
+
+hook 以普通用户权限运行，可连通 `127.0.0.1:37701`；实测一次运行产生了标记为 `platformSource=codex` 的一条 prompt + 一条 observation + 一条 summary。
+
+
+---
+
+
 ### 3.3 pi（原生扩展，npm 包）
 
 pi 是 npm 包，**不能直接覆盖**，需按 `agents/pi/DEPLOY.md` 部署。要点：
@@ -250,7 +279,7 @@ python3 claude-mem-worker.py search      <query> [limit]
 python3 claude-mem-worker.py health
 ```
 
-`<agent>` 区分来源（`codebuddy` / `hermes` / ...），自动拼成 `${agent}-${sessionId}`。
+`<agent>` 区分来源（`codebuddy` / `codex` / `hermes` / ...），自动拼成 `${agent}-${sessionId}`。
 
 **环境变量**：`CLAUDE_MEM_WORKER_HOST`(默认127.0.0.1) / `CLAUDE_MEM_WORKER_PORT`(37701) /
 `CLAUDE_MEM_HTTP_TIMEOUT`(8s) / `CLAUDE_MEM_HTTP_RETRIES`(2) / `CLAUDE_MEM_QUIET`(0)。
@@ -266,7 +295,7 @@ worker 不可达时脚本**静默 exit 0**，不阻塞 agent。
 ```bash
 # 用统一脚本直接打 worker
 W="python3 ~/.local/share/claude-mem/claude-mem-worker.py"
-for a in opencode codebuddy pi hermes; do
+for a in opencode codebuddy codex pi hermes; do
   $W init $a s1 /tmp
   $W observation $a s1 "测试文本 $a" /tmp assistant_message $a
   $W summarize $a s1 "" $a
@@ -281,6 +310,7 @@ curl -s http://127.0.0.1:37701/api/stats
 
 - **opencode**：开会话聊几句 → 空闲后看是否弹 “记忆已保存” toast；`curl :37701/api/stats` observations+。
 - **CodeBuddy**：正常对话一轮 → `curl :37701/api/stats` 应有该 session 的 observation。
+- **Codex CLI**：在 `/hooks` 信任后（或带 `--dangerously-bypass-hook-trust`）跑一轮，应出现 `platform_source=codex` 的新会话及 prompt/observation/summary。
 - **pi**：`/memory-status` 显示已连接；聊完看 summaries 增长。
 - **Hermes**：对话结束 → 查 worker stats。
 
@@ -300,6 +330,8 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=你的关键词&li
 | 连得上但不产生记忆 | AI provider 未配 | 配 `CLAUDE_MEM_OPENROUTER_API_KEY` 等，重启 worker |
 | opencode 双份写入 | 官方 shim 与插件共存 | `opencode.json` 的 `plugin` 只留一个 |
 | CodeBuddy 双份写入 | MCP 版 + hook 版共存 | 只留 hook 版 |
+| Codex hook 完全不触发 | hook 未受信任（headless `codex exec` 跳过未信任 hook） | 在 `/hooks` 信任一次，或加 `--dangerously-bypass-hook-trust` |
+| Codex 报 `invalid type … expected struct HooksToml` | 误把 config.toml 的 `hooks` 写成路径字符串 | hook 放进 `~/.codex/hooks.json`；config.toml 只需 `[features] hooks=true` |
 | pi 连 37777 失败 | settings.json 非法 JSON / 端口写成字符串 | 改合法 JSON + 数字端口 37701 |
 | 敲 `pi` 报 command not found | `~/.npm-global/bin` 不在 PATH | `export PATH="$HOME/.npm-global/bin:$PATH"` |
 | hook 调用报错 | 路径占位符未替换 / 变量名不符 | 检查 `hooks.claude-mem.json` 路径；按 CodeBuddy 实际变量调整 |
@@ -314,6 +346,7 @@ curl -s "http://127.0.0.1:37701/api/search/observations?query=你的关键词&li
 
 # 移除 opencode 插件：从 opencode.json 的 plugin 数组删掉该目录
 # 移除 CodeBuddy：删 hooks.json 里对应 command
+# 移除 Codex：从 ~/.codex/hooks.json 删四个 worker 命令（herdr hook 保持不动）
 # 移除 pi：pi remove /绝对路径/agent-memory-bridge/agents/pi
 # 移除 Hermes：删 engine.py 里注入的函数调用
 ```

@@ -6,6 +6,7 @@ One adapter per agent. Every adapter **only captures conversation events and sen
 |---|---|---|---|
 | [`opencode/`](./opencode/) | OpenCode | Native plugin (`PluginModule`) | Add the directory to the `"plugin"` array of `opencode.json` |
 | [`codebuddy/`](./codebuddy/) | CodeBuddy | Claude-Code-style hooks calling the worker script | Merge the `hooks` object into `~/.codebuddy/settings.json` |
+| [`codex/`](./codex/) | Codex CLI (≥ 0.131) | Claude-Code-style hooks calling the worker script | Installer merges into `~/.codex/hooks.json` + enables `[features] hooks`; trust once via `/hooks` (or `--dangerously-bypass-hook-trust` headless) |
 | [`pi/`](./pi/) | pi (pi-coding-agent) | Native TypeScript extension (local-path package) | From `agents/pi`, run `pi install "$PWD"` (registers the repo path; no copy/sync) |
 | [`hermes/`](./hermes/) | Hermes | Python snippet injected into the engine/gateway | Paste into the engine event point |
 
@@ -14,7 +15,7 @@ One adapter per agent. Every adapter **only captures conversation events and sen
 The unified script prefixes every session id with its agent, so identical ids never collide in the shared store:
 
 ```
-opencode-<sessionId>   codebuddy-<sessionId>   pi-<sessionId>   hermes-<sessionId>
+opencode-<sessionId>   codebuddy-<sessionId>   codex-<sessionId>   pi-<sessionId>   hermes-<sessionId>
 ```
 
 ## Full documentation
