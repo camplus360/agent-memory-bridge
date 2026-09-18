@@ -1,6 +1,6 @@
 {
-  "name": "pi-agent-memory-bridge",
-  "version": "1.0.1",
+  "name": "agent-memory-bridge",
+  "version": "1.0.2",
   "description": "Self-maintained pi-coding-agent memory extension: a thin client for the local claude-mem worker HTTP API. Records tool activity, injects relevant past context, and registers a memory_recall search tool.",
   "keywords": [
     "pi-package",

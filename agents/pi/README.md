@@ -1,4 +1,4 @@
-# pi-agent-memory-bridge
+# agent-memory-bridge (pi adapter)
 
 **持久记忆，随拿随用。** 一个为
 [pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
@@ -14,7 +14,7 @@
 | 亮点 | 说明 |
 |:--|:--|
 | **🔄 多 Agent 适配** | 与 OpenCode / CodeBuddy / Hermes 共享同一记忆库，pi 里记的，其它 agent 也能搜到 |
-| **🚀 一键安装** | `pi install npm:pi-agent-memory-bridge` 一条命令，npm 市场直接装 |
+| **🚀 一键安装** | `pi install npm:agent-memory-bridge` 一条命令，npm 市场直接装 |
 | **📥 自动捕获** | 自动记录用户提问、工具调用、助手回复、会话结束，零手动操作 |
 | **🔌 后端可拔插** | 底层可切换 claude-mem / mem0 / both，一个环境变量搞定 |
 | **🌐 中英双语** | 中英双语文档 |
@@ -26,7 +26,7 @@
 curl -s http://127.0.0.1:37701/api/health
 
 # 2. install from the npm registry (recommended)
-pi install npm:pi-agent-memory-bridge
+pi install npm:agent-memory-bridge
 
 #    or install from source (local path):
 cd /path/to/agent-memory-bridge/agents/pi
@@ -39,7 +39,7 @@ pi install "$PWD"
 ```json
 {
   "packages": [
-    "npm:pi-agent-memory-bridge"
+    "npm:agent-memory-bridge"
   ]
 }
 ```
@@ -52,7 +52,7 @@ version and `degraded: false`.
 ### Uninstall
 
 ```bash
-pi remove npm:pi-agent-memory-bridge
+pi remove npm:agent-memory-bridge
 ```
 
 then restart pi.
