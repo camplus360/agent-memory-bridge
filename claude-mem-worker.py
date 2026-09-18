@@ -413,7 +413,7 @@ def cmd_api(av):
 
 def cmd_hook(av):
     # args: agent
-    # Reads Claude Code / CodeBuddy hook JSON from stdin and maps it to the API.
+    # Reads Claude Code / CodeBuddy / Codex hook JSON from stdin and maps it to the API.
     #
     # Claude Code style hooks pass JSON via stdin, typical fields:
     #   { hook_event_name, session_id, transcript_path, cwd,
@@ -432,6 +432,7 @@ def cmd_hook(av):
         return
 
     evt = sid = cwd = txt = ""
+    last_msg = ""
     tool_name = "tool_use"
     try:
         d = json.loads(raw)
@@ -456,6 +457,10 @@ def cmd_hook(av):
             txt = d.get("prompt") or ""
         elif evt == "Stop":
             txt = ""
+            # Codex / newer Claude-Code-style hooks deliver the final assistant
+            # turn on Stop; forward it so the summarizer gets real content instead
+            # of the worker's "Missing last_assistant_message" fallback.
+            last_msg = d.get("last_assistant_message") or ""
         tool_name = d.get("tool_name") or "tool_use"
 
     if not sid:
@@ -495,7 +500,7 @@ def cmd_hook(av):
             return
         rc = run_self(["observation", agent, sid, txt, cwd or os.getcwd(), tool_name, agent])
     elif evt == "Stop":
-        rc = run_self(["summarize", agent, sid, "", agent])
+        rc = run_self(["summarize", agent, sid, last_msg, agent])
     # Unknown event: ignore and exit silently; propagate a real upload failure.
     if rc:
         sys.exit(rc)

@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /ABS/PATH/agent-memory-bridge/claude-mem-worker.py hook codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /ABS/PATH/agent-memory-bridge/claude-mem-worker.py hook codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /ABS/PATH/agent-memory-bridge/claude-mem-worker.py hook codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /ABS/PATH/agent-memory-bridge/claude-mem-worker.py hook codex",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
