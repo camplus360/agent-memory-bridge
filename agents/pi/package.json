@@ -1,6 +1,6 @@
 {
   "name": "agent-memory-bridge",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Cross-session memory for pi-coding-agent (pi-mono). A thin client for the local claude-mem worker: records tool activity, injects relevant past context, and registers a memory_recall search tool. Share memory across pi, Claude Code, Cursor, Codex and OpenClaw.",
   "keywords": [
     "agent-memory-bridge",
@@ -39,6 +39,9 @@
     "directory": "agents/pi"
   },
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "pi": {
     "extensions": [

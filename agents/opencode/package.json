@@ -1,6 +1,6 @@
 {
   "name": "@camplus360/agent-memory-bridge-opencode",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "OpenCode plugin: captures conversation observations to the local claude-mem worker, giving OpenCode cross-session shared memory. Summarization/embedding/search stay in claude-mem.",
   "keywords": [
     "agent-memory-bridge",
@@ -34,5 +34,9 @@
   ],
   "scripts": {
     "test": "bun run index.test.js"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "public"
   }
 }
